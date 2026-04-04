@@ -53,7 +53,24 @@ The discovery runs in iterative rounds:
 2. **Round 2+**: LLM sees all hunks again with the accumulated graph as context. Merges near-synonymous atomic units, discovers missed edges, reclassifies where needed. Explicitly asks: "are any existing atomic units actually the same thing?"
 3. **Converge**: Stop when a full round produces zero new edges or reclassifications.
 
-### III. Hunk Boundaries Are Not Sacred
+### III. LLM Synthesizes Intermediate States
+
+When a hunk sits at the intersection of two edges (two reasons), it can't belong to just one atomic unit. The LLM can **rewrite it as two sequential hunks**, each satisfying one edge. This produces an intermediate code state that never existed in the original history — and that's fine. The goal is a reviewable narrative, not a reconstruction of what happened.
+
+The constraint: the final state after applying both hunks must be identical to the original. The intermediate state is the LLM's invention, validated by the oracle.
+
+Example: a function that gets both a new argument AND uses a new type becomes two commits — one for the type adoption, one for the API change. The LLM writes the intermediate version where only one change is applied.
+
+### IV. Two-Tier Oracle: LSP + Full Build
+
+The compile oracle has two tiers:
+
+1. **LSP (fast, incremental)** — for the tight feedback loop during hunk splitting and intermediate state synthesis. Since we always start from a compiling state, LSP is quiet. The moment the LLM applies a change, LSP fires diagnostics within milliseconds — type errors, missing imports, unknown names. The LLM iterates with LSP until diagnostics are clean.
+2. **Full build (slow, definitive)** — for final validation of each commit in the sequence. Catches everything LSP might miss: linker errors, Template Haskell, CPP, cross-module issues.
+
+The LSP tier is a future enhancement. The basic tool works with just the full build oracle. LSP makes the LLM's code synthesis loop practical at scale.
+
+### V. Hunk Boundaries Are Not Sacred
 
 Git's diff algorithm optimizes for minimal output, not semantic meaning. It may merge unrelated changes into one hunk (e.g. a signature change and an adjacent new function) or cut at awkward boundaries. The tool must not treat git's hunk boundaries as ground truth.
 
@@ -64,22 +81,22 @@ Mitigations:
 
 Additionally, "pure additions" at the code level may appear as modifications in the diff: adding an import to an existing import list, adding to an export list, extending a deriving clause, adding a record field. These are **addition-enabling modifications** — they exist solely to make a new addition visible/usable. The classifier must recognize them as belonging to their addition's category, not as independent modifications.
 
-### IV. Preflight Rules Are a Codebook
+### VI. Preflight Rules Are a Codebook
 
 The preflight rules (R1–R12) form a growing codebook maintained in `docs/hunk-zoo.md`. Each rule is a pattern learned from real diffs that mechanically discovers edges (dependency or co-occurrence). When the LLM encounters a new recurring edge pattern during discovery, it should be promoted to a preflight rule — expanding the mechanical layer and reducing future LLM calls.
 
-### V. Pluggable Components
+### VII. Pluggable Components
 
 Three pluggable axes:
 - **LLM CLI** — any tool that accepts a prompt on stdin and returns structured output. No hardcoded API.
 - **Compile oracle** — pluggable per language (GHC, cargo, go build, etc.). The oracle is the correctness proof.
 - **VCS** — git for now, but the diff parsing should not assume git internals beyond unified diff format.
 
-### VI. Babashka Orchestration
+### VIII. Babashka Orchestration
 
 Babashka owns all state: the diff, the patch sets, the iteration loop, the git operations. The LLM never touches git directly. Babashka calls the LLM CLI as a function: context in, structured JSON out.
 
-### VII. Compile-Validated Commits
+### IX. Compile-Validated Commits
 
 Every unfolded commit must compile when prepended to the remaining stack. If it doesn't compile, the extraction was wrong — either too much or too little was extracted. The tool retries by adjusting the hunk assignment (LLM-assisted if needed). Deletions are exempt from compile checks (they're always last).
 
@@ -112,4 +129,4 @@ Every unfolded commit must compile when prepended to the remaining stack. If it 
 
 Constitution supersedes all other practices. Amendments require documentation and user approval.
 
-**Version**: 1.3.0 | **Ratified**: 2026-04-04 | **Last Amended**: 2026-04-04
+**Version**: 1.4.0 | **Ratified**: 2026-04-04 | **Last Amended**: 2026-04-04
