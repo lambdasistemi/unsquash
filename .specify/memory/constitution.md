@@ -12,12 +12,24 @@ The tool operates in two phases on a messy commit sequence:
 
 The tool works on a single commit (skip phase 1) or a commit range / PR (full two-phase workflow).
 
-### II. Iterative Semantic Classification
+### II. Three-Layer Classification
 
-The core engine is a per-hunk classifier that answers: "why does this change exist?" Each hunk gets tagged with a reason (e.g. "adds constructor `Foo` to type `Bar`", "caller of `baz` updated for new argument `quux`", "import added to make `helper` visible"). Reasons are not predefined categories — they emerge from the code.
+The hunk classifier operates in three layers, each reducing work for the next:
+
+**Layer 1 — Preflight (mechanical, no LLM).** Deterministic rules applied to raw diff structure. Each rule tags hunks with a candidate category and confidence level. Hunks matching these rules are pre-tagged before the LLM sees them. See `docs/hunk-zoo.md` for the full rule catalog (R1–R12). Examples:
+- R1: Export of name defined in same diff → `addition:wiring`
+- R3: Import list is strict superset of old → `addition:wiring`
+- R5: Wildcard count change in pattern match → `addition:wiring:mechanical`
+- R8: Whitespace-only line change → `formatting` (strip before classification)
+
+For high-confidence preflight tags (R4 trailing comma, R5 wildcards, R8 whitespace), the LLM may never need to see the hunk at all.
+
+**Layer 2 — LLM confirmation.** For preflight-tagged hunks where confidence is moderate, the LLM validates: "this hunk was pre-classified as `addition:wiring` because the import list is a strict superset. Does that look right?" Cheap, narrow question.
+
+**Layer 3 — LLM classification with iterative refinement.** For untagged hunks or low-confidence preflight, the LLM answers: "why does this change exist?" Each hunk gets tagged with a reason (e.g. "adds constructor `Foo` to type `Bar`", "caller of `baz` updated for new argument `quux`"). Reasons are not predefined categories — they emerge from the code.
 
 The classifier runs in iterative rounds:
-1. **Round 1**: LLM classifies each hunk with surrounding code context. Produces initial reasons — may be vague or inconsistent.
+1. **Round 1**: LLM classifies each hunk with surrounding code context and any preflight tags. Produces initial reasons — may be vague or inconsistent.
 2. **Round 2+**: LLM sees all hunks again with the accumulated category list as context. Collapses duplicates, merges near-synonymous reasons, reclassifies where needed. Explicitly asks: "are any existing categories actually the same thing?"
 3. **Converge**: Stop when a full round produces zero reclassifications.
 
@@ -34,9 +46,9 @@ Mitigations:
 
 Additionally, "pure additions" at the code level may appear as modifications in the diff: adding an import to an existing import list, adding to an export list, extending a deriving clause, adding a record field. These are **addition-enabling modifications** — they exist solely to make a new addition visible/usable. The classifier must recognize them as belonging to their addition's category, not as independent modifications.
 
-### IV. Mechanical Before Semantic
+### IV. Preflight Rules Are a Codebook
 
-Where possible, classification is mechanical: new files, new top-level blocks separated by blank lines, and pure deletion hunks can be identified by diff structure alone. The iterative LLM classifier handles everything else.
+The preflight rules (R1–R12) form a growing codebook maintained in `docs/hunk-zoo.md`. Each rule is a pattern learned from real diffs. When the LLM encounters a new recurring pattern during classification, it should be promoted to a preflight rule — expanding the mechanical layer and reducing future LLM calls.
 
 ### V. Pluggable Components
 
@@ -82,4 +94,4 @@ Every unfolded commit must compile when prepended to the remaining stack. If it 
 
 Constitution supersedes all other practices. Amendments require documentation and user approval.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-04 | **Last Amended**: 2026-04-04
+**Version**: 1.2.0 | **Ratified**: 2026-04-04 | **Last Amended**: 2026-04-04
