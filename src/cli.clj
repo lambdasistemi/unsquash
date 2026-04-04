@@ -9,7 +9,8 @@
             [core.graph :as g]
             [core.sequencer :as seq]
             [llm.classifier :as llm]
-            [oracle.compile :as oracle]))
+            [oracle.compile :as oracle]
+            [consolidate.smart-squash :as sq]))
 
 ;; --- Config ---
 
