@@ -2,7 +2,8 @@
   "Flatten a dependency graph ordering into a commit sequence.
    Apply atomic units as git commits, validate each with oracle."
   (:require [babashka.process :as p]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [core.message :as msg]))
 
 (defn- git
   "Run a git command in the given directory. Returns stdout or throws."
@@ -110,15 +111,21 @@
 
 (defn apply-atomic-unit
   "Apply an atomic unit as a git commit.
+   Options:
+     :llm-fn — if provided, used for LLM-generated commit messages
    Returns {:sha str :message str :compiles bool :error str}."
-  [unit oracle-fn dir]
-  (let [message (str (cond
-                       (str/starts-with? (:identity unit) "define:") "feat: "
-                       (str/starts-with? (:identity unit) "use:") "refactor: "
-                       (str/starts-with? (:identity unit) "removal:") "refactor: "
-                       (str/starts-with? (:identity unit) "api-change:") "refactor: "
-                       :else "chore: ")
-                     (:identity unit))]
+  [unit oracle-fn dir & {:keys [llm-fn]}]
+  (let [hunks (vec (:hunks unit))
+        ;; Generate commit message from diff content
+        message (or (when llm-fn
+                      (let [files (distinct (map :file hunks))
+                            diff-preview (str/join "\n"
+                                                   (for [h hunks]
+                                                     (str (:file h) " @" (:old-start h) ": "
+                                                          (count (filter #(= :add (:type %)) (:lines h))) "+"
+                                                          (count (filter #(= :remove (:type %)) (:lines h))) "-")))]
+                        (msg/generate-message-llm llm-fn diff-preview files)))
+                    (msg/generate-message hunks (:identity unit)))]
     (try
       ;; Apply hunks one at a time
       (apply-hunks-sequentially (vec (:hunks unit)) dir)
@@ -203,7 +210,7 @@
    retry-fn receives context and returns {:action :merge/:skip, ...} or nil.
    Default retry-fn merges with a same-file neighbor."
   [ordering graph oracle-fn dir original-tree-sha
-   & {:keys [max-retries retry-fn] :or {max-retries 3}}]
+   & {:keys [max-retries retry-fn llm-fn] :or {max-retries 3}}]
   (let [total-retries (atom 0)
         retry-fn (or retry-fn
                      (fn [{:keys [failed-unit failed-result remaining-ids graph]}]
@@ -220,7 +227,7 @@
         ;; Try next unit
         (let [unit-id (first remaining)
               unit (get-in graph [:nodes unit-id])
-              result (apply-atomic-unit unit oracle-fn dir)
+              result (apply-atomic-unit unit oracle-fn dir :llm-fn llm-fn)
               rest-ids (vec (rest remaining))]
           (if (:compiles result)
             (recur rest-ids graph (conj commits result))
