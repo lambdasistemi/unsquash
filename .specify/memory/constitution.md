@@ -2,13 +2,19 @@
 
 ## Core Principles
 
-### I. Iterative Unfolding
+### I. Two-Phase Rewriting
 
-The algorithm works from the periphery to the center. Pure additions are extracted first (zero conflict risk), then internal rewrites (same API), then API changes (with callsite fallout), then deletions (always last). Each iteration shrinks the remaining diff. The compile oracle validates every unfolded commit.
+The tool operates in two phases on a messy commit sequence:
+
+**Phase 1 — Consolidate (smart squash).** LLM groups commits that belong together: a commit and its fixup, two commits touching the same concern, WIP noise. Squash each group, preserving original order. Order preservation guarantees compilability. The original commit boundaries carry signal about intent — never squash everything into one blob first, because that destroys information that makes phase 2 easier.
+
+**Phase 2 — Unfold (decompose).** For each remaining commit that's too big, decompose into sub-commits using iterative unfolding from periphery to center: pure additions first, then internal rewrites (same API), then API changes (with callsite fallout), then deletions (always last). Each iteration shrinks the remaining diff.
+
+The tool works on a single commit (skip phase 1) or a commit range / PR (full two-phase workflow).
 
 ### II. Mechanical Before Semantic
 
-Hunk classification is mechanical wherever possible: pure additions, pure deletions, and unchanged-signature body edits can be identified by diff analysis alone. LLM is only invoked for semantic questions: "did this function's API change?", "which callsite hunks belong to this signature change?", "what's the dependency order?"
+Hunk classification is mechanical wherever possible: pure additions, pure deletions, and unchanged-signature body edits can be identified by diff analysis alone. LLM is only invoked for semantic questions: "did this function's API change?", "which callsite hunks belong to this signature change?", "what's the dependency order?", and for phase 1 grouping decisions.
 
 ### III. Pluggable Components
 
