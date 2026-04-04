@@ -14,13 +14,12 @@
                  (let [proc (p/process {:cmd ["sh" "-c" command]
                                         :dir (or dir ".")
                                         :out :string
-                                        :err :string})]
-                   (deref proc timeout nil)
-                   (let [exit (:exit @proc)]
-                     {:success (zero? exit)
-                      :stderr (slurp (:err proc))
-                      :stdout (slurp (:out proc))
-                      :exit exit}))
+                                        :err :string})
+                       r @proc]
+                   {:success (zero? (:exit r))
+                    :stderr (:err r)
+                    :stdout (:out r)
+                    :exit (:exit r)})
                  (catch Exception e
                    {:success false
                     :stderr (str "Oracle error: " (.getMessage e))
