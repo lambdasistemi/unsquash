@@ -38,3 +38,15 @@ apply *ARGS:
 # Consolidate commit range
 consolidate *ARGS:
     bb consolidate {{ARGS}}
+
+# Build documentation site
+build-docs:
+    mkdocs build
+
+# Serve documentation locally
+serve-docs:
+    mkdocs serve
+
+# Deploy documentation to GitHub Pages
+deploy-docs:
+    mkdocs gh-deploy --force
