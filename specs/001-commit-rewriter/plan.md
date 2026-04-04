@@ -62,12 +62,15 @@ src/
 ├── core/
 │   ├── diff_parser.clj       # Unified diff → hunk data structures
 │   ├── hunk_splitter.clj     # Split hunks at natural boundaries
-│   ├── preflight.clj         # Mechanical edge discovery (R1–R12)
+│   ├── preflight.clj         # Universal structural edge discovery (language-agnostic)
 │   ├── graph.clj             # Dependency graph: nodes, edges, contraction, toposort
 │   └── sequencer.clj         # Flatten graph into commit sequence + apply
 ├── llm/
 │   ├── classifier.clj        # LLM edge discovery: prompt construction, response parsing
+│   ├── semantic_preflight.clj # LLM semantic preflight (Layer 2): single-pass edge discovery
 │   └── synthesizer.clj       # LLM intermediate state generation (FR-007)
+├── plugins/
+│   └── haskell.clj           # Haskell language plugin: R1–R5, R9 rules
 ├── oracle/
 │   └── compile.clj           # Compile oracle interface + pluggable backends
 ├── consolidate/
