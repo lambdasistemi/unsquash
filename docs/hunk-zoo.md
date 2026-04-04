@@ -433,17 +433,28 @@ A good classifier should group hunks 2-13 under one semantic unit.
 
 ## Summary: Pre-Classification Rules
 
+Rules are divided into **universal** (language-agnostic, always active) and **language plugin** (require language-specific knowledge, opt-in).
+
+### Universal Rules (Layer 1 — structural preflight)
+
 | Rule | Pattern | Tag |
 |------|---------|-----|
-| R1 | Export of name defined in same diff | `addition:wiring` |
-| R2 | Import of name used only in new code | `addition:wiring` |
-| R3 | Import list is strict superset of old | `addition:wiring` (not `modification`) |
 | R4 | Trailing comma added adjacent to new item | `addition:formatting` (merge with item) |
-| R5 | Wildcard count change in pattern match | `addition:wiring:mechanical` |
-| R6 | Same constraint removed in 3+ files | `removal:systematic` |
+| R6 | Same change repeated in 3+ files | `removal:systematic` or `addition:systematic` |
 | R7 | Deleted line appears as addition in other file | `move` |
 | R8 | Whitespace-only line change | `formatting` (strip before classification) |
-| R9 | New case branch with constructor from same diff | `addition:wiring` |
 | R10 | Blank line removal between unrelated changes | Split at boundary |
 | R11 | Reformatted expression with changed arguments | Normalize formatting, then re-diff |
 | R12 | N hunks sharing same deletion/addition pattern | Group into single semantic unit |
+
+### Language Plugin Rules (Haskell — reference implementation)
+
+These rules are handled by the LLM semantic preflight (Layer 2) when no plugin is active. With the Haskell plugin, they become deterministic.
+
+| Rule | Pattern | Tag |
+|------|---------|-----|
+| R1 | Export of name defined in same diff (`module...where`) | `addition:wiring` |
+| R2 | Import of name used only in new code (`import`) | `addition:wiring` |
+| R3 | Import list is strict superset of old | `addition:wiring` (not `modification`) |
+| R5 | Wildcard count change in pattern match | `addition:wiring:mechanical` |
+| R9 | New case branch with constructor from same diff | `addition:wiring` |

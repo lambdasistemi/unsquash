@@ -16,7 +16,7 @@ Build an MCP tool that takes a messy commit sequence (or single squashed commit)
 **Target Platform**: Linux (primary), macOS (secondary). Runs where bb and git are available.
 **Project Type**: CLI tool + MCP server
 **Performance Goals**: Process a 500-line diff within 10 minutes including oracle calls (SC-001)
-**Constraints**: LLM calls are the bottleneck — minimize round-trips. Preflight rules should handle 40%+ of hunks mechanically (SC-002).
+**Constraints**: LLM calls are the bottleneck — minimize round-trips. Structural preflight + LLM semantic preflight should classify 80%+ of hunks before iterative refinement (SC-002). With a language plugin, structural preflight alone should handle 40%+.
 **Scale/Scope**: Single-user CLI tool. Diffs up to ~2000 lines. Not designed for monorepo-scale changes.
 
 ## Constitution Check
@@ -30,7 +30,7 @@ Build an MCP tool that takes a messy commit sequence (or single squashed commit)
 | III. LLM Synthesizes Intermediate States | PASS | FR-007 covers this; deferred to later iteration |
 | IV. Two-Tier Oracle | PASS | Full build oracle first; LSP tier is future enhancement |
 | V. Hunk Boundaries Not Sacred | PASS | Hunk splitting at blank lines + patience diff in plan |
-| VI. Preflight Codebook | PASS | R1–R12 implemented as mechanical rules |
+| VI. Preflight Rules | PASS | Universal structural rules (language-agnostic) + optional language plugins. R1–R5,R9 moved to Haskell plugin. |
 | VII. Pluggable Components | PASS | LLM CLI, oracle, VCS all pluggable via config |
 | VIII. Babashka Orchestration | PASS | bb owns all state, LLM is a function |
 | IX. Compile-Validated Commits | PASS | Oracle validates each commit in sequence |
@@ -62,12 +62,15 @@ src/
 ├── core/
 │   ├── diff_parser.clj       # Unified diff → hunk data structures
 │   ├── hunk_splitter.clj     # Split hunks at natural boundaries
-│   ├── preflight.clj         # Mechanical edge discovery (R1–R12)
+│   ├── preflight.clj         # Universal structural edge discovery (language-agnostic)
 │   ├── graph.clj             # Dependency graph: nodes, edges, contraction, toposort
 │   └── sequencer.clj         # Flatten graph into commit sequence + apply
 ├── llm/
 │   ├── classifier.clj        # LLM edge discovery: prompt construction, response parsing
+│   ├── semantic_preflight.clj # LLM semantic preflight (Layer 2): single-pass edge discovery
 │   └── synthesizer.clj       # LLM intermediate state generation (FR-007)
+├── plugins/
+│   └── haskell.clj           # Haskell language plugin: R1–R5, R9 rules
 ├── oracle/
 │   └── compile.clj           # Compile oracle interface + pluggable backends
 ├── consolidate/
