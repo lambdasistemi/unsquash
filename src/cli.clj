@@ -25,11 +25,10 @@
 ;; --- Git helpers ---
 
 (defn- git [& args]
-  (let [proc (p/process {:cmd (into ["git"] args)
-                         :out :string
-                         :err :string})]
-    (deref proc 30000 nil)
-    (str/trim (slurp (:out proc)))))
+  (let [result @(p/process {:cmd (into ["git"] args)
+                            :out :string
+                            :err :string})]
+    (str/trim (:out result))))
 
 (defn- get-diff
   "Get diff for a ref or range. Supports --diff-algorithm."
