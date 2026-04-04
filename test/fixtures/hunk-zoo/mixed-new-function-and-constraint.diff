@@ -1,0 +1,23 @@
+--- a/src/Rules.hs
++++ b/src/Rules.hs
+@@ -20,10 +20,21 @@
+   ) =>
+   NFData (PredFailure era)
+
++-- | New helper function
++helper ::
++  (EraScript era) =>
++  Tx era ->
++  State era ->
++  State era
++helper tx st =
++  case tx ^. isValidL of
++    IsValid True -> updateState tx st
++    IsValid False -> st
++
+ transition ::
+   forall era.
+   ( EraUTxO era
+-  , BabbageEraTxBody era
+   , AlonzoEraTx era
++  , ConwayEraTxBody era

@@ -1,0 +1,14 @@
+--- a/src/Foo.hs
++++ b/src/Foo.hs
+@@ -1,5 +1,6 @@
+ module Foo (
+   existing,
++  newThing,
+ ) where
+
+ existing :: Int
+@@ -7,3 +8,6 @@
+ existing = 42
++
++newThing :: String
++newThing = "hello"

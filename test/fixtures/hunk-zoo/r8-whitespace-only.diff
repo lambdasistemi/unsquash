@@ -1,0 +1,8 @@
+--- a/src/Clean.hs
++++ b/src/Clean.hs
+@@ -3,5 +3,5 @@
+ foo :: Int -> Bool
+ foo x = x > 0
+-
++
+ bar :: String

@@ -1,0 +1,8 @@
+--- a/src/Types.hs
++++ b/src/Types.hs
+@@ -5,5 +5,5 @@
+ data MyRecord = MyRecord { field1 :: Int, field2 :: String, field3 :: Bool }
+
+ instance NFData MyRecord where
+-  rnf (MyRecord _ _ _) = ()
++  rnf (MyRecord _ _ _ _) = ()

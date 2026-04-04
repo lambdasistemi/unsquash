@@ -1,0 +1,8 @@
+--- a/src/Decoder.hs
++++ b/src/Decoder.hs
+@@ -10,5 +10,6 @@
+         1 -> decodeV1
+         2 -> decodeV2
+         3 -> decodeV3
++        4 -> decodeV4
+         n -> fail $ "Unknown version: " ++ show n

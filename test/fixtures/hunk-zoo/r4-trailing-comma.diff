@@ -1,0 +1,8 @@
+--- a/src/Baz.hs
++++ b/src/Baz.hs
+@@ -1,4 +1,5 @@
+ module Baz (
+-  alpha
++  alpha,
++  beta
+ ) where

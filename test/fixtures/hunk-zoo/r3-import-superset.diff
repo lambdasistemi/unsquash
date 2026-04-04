@@ -1,0 +1,9 @@
+--- a/src/Bar.hs
++++ b/src/Bar.hs
+@@ -1,4 +1,4 @@
+-import Foo (existing)
++import Foo (existing, newThing)
+
+ bar :: String
+-bar = show existing
++bar = show existing ++ newThing
