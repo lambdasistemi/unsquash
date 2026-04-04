@@ -8,17 +8,15 @@
 ;; --- Git helpers ---
 
 (defn- git [dir & args]
-  (let [proc (p/process {:cmd (into ["git"] args)
-                         :dir dir
-                         :out :string
-                         :err :string})]
-    (deref proc 30000 nil)
-    (let [exit (:exit @proc)]
-      (if (zero? exit)
-        (str/trim (slurp (:out proc)))
-        (throw (ex-info (str "git failed: " (str/join " " args))
-                        {:exit exit
-                         :stderr (slurp (:err proc))}))))))
+  (let [result @(p/process {:cmd (into ["git"] args)
+                            :dir dir
+                            :out :string
+                            :err :string})]
+    (if (zero? (:exit result))
+      (str/trim (:out result))
+      (throw (ex-info (str "git failed: " (str/join " " args))
+                      {:exit (:exit result)
+                       :stderr (:err result)})))))
 
 ;; --- T024: Commit range parser ---
 

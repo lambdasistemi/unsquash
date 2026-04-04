@@ -10,20 +10,29 @@
   (let [proc (p/process {:cmd (into ["git"] args)
                          :dir dir
                          :out :string
-                         :err :string})]
-    (deref proc 30000 nil)
-    (let [exit (:exit @proc)]
-      (if (zero? exit)
-        (str/trim (slurp (:out proc)))
-        (throw (ex-info (str "git failed: " (str/join " " args))
-                        {:exit exit
-                         :stderr (slurp (:err proc))}))))))
+                         :err :string})
+        result @proc]
+    (if (zero? (:exit result))
+      (str/trim (:out result))
+      (throw (ex-info (str "git failed: " (str/join " " args))
+                      {:exit (:exit result)
+                       :stderr (:err result)})))))
+
+(defn- new-file? [hunk]
+  (and (zero? (:old-count hunk))
+       (every? #(= :add (:type %)) (filter #(not= :context (:type %)) (:lines hunk)))))
+
+(defn- deleted-file? [hunk]
+  (and (zero? (:new-count hunk))
+       (every? #(= :remove (:type %)) (filter #(not= :context (:type %)) (:lines hunk)))))
 
 (defn- apply-hunk-lines
   "Generate a patch string from a hunk that can be applied with git apply."
   [hunk]
   (let [{:keys [file old-start old-count new-start new-count lines]} hunk
-        header (str "--- a/" file "\n+++ b/" file "\n"
+        from-path (if (new-file? hunk) "/dev/null" (str "a/" file))
+        to-path (if (deleted-file? hunk) "/dev/null" (str "b/" file))
+        header (str "--- " from-path "\n+++ " to-path "\n"
                     "@@ -" old-start "," old-count " +" new-start "," new-count " @@\n")
         body (str/join "\n"
                        (map (fn [line]
@@ -40,9 +49,13 @@
   (let [hunks-by-file (group-by :file (:hunks atomic-unit))]
     (str/join "\n"
               (for [[file hunks] hunks-by-file]
-                (str "diff --git a/" file " b/" file "\n"
-                     (str/join "" (map apply-hunk-lines
-                                      (sort-by :old-start hunks))))))))
+                (let [is-new (every? new-file? hunks)
+                      is-del (every? deleted-file? hunks)]
+                  (str "diff --git a/" file " b/" file "\n"
+                       (when is-new "new file mode 100644\n")
+                       (when is-del "deleted file mode 100644\n")
+                       (str/join "" (map apply-hunk-lines
+                                        (sort-by :old-start hunks)))))))))
 
 (defn apply-atomic-unit
   "Apply an atomic unit as a git commit.
