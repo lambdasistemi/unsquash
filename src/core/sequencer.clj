@@ -43,6 +43,22 @@
                             lines))]
     (str header body "\n")))
 
+(defn- make-new-file-patch
+  "Generate a patch for a completely new file by combining all sub-hunks."
+  [file hunks]
+  (let [sorted (sort-by :new-start hunks)
+        all-adds (mapcat (fn [h]
+                           (map :content (filter #(= :add (:type %)) (:lines h))))
+                         sorted)
+        total-lines (count all-adds)
+        body (str/join "\n" (map #(str "+" %) all-adds))]
+    (str "diff --git a/" file " b/" file "\n"
+         "new file mode 100644\n"
+         "--- /dev/null\n"
+         "+++ b/" file "\n"
+         "@@ -0,0 +1," total-lines " @@\n"
+         body "\n")))
+
 (defn- make-patch
   "Generate a full patch string from an atomic unit's hunks."
   [atomic-unit]
@@ -51,11 +67,12 @@
               (for [[file hunks] hunks-by-file]
                 (let [is-new (every? new-file? hunks)
                       is-del (every? deleted-file? hunks)]
-                  (str "diff --git a/" file " b/" file "\n"
-                       (when is-new "new file mode 100644\n")
-                       (when is-del "deleted file mode 100644\n")
-                       (str/join "" (map apply-hunk-lines
-                                        (sort-by :old-start hunks)))))))))
+                  (if is-new
+                    (make-new-file-patch file hunks)
+                    (str "diff --git a/" file " b/" file "\n"
+                         (when is-del "deleted file mode 100644\n")
+                         (str/join "" (map apply-hunk-lines
+                                          (sort-by :old-start hunks))))))))))
 
 (defn apply-atomic-unit
   "Apply an atomic unit as a git commit.
