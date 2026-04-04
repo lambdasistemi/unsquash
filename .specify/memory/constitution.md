@@ -138,4 +138,4 @@ Every unfolded commit must compile when prepended to the remaining stack. If it 
 
 Constitution supersedes all other practices. Amendments require documentation and user approval.
 
-**Version**: 1.4.0 | **Ratified**: 2026-04-04 | **Last Amended**: 2026-04-04
+**Version**: 2.0.0 | **Ratified**: 2026-04-04 | **Last Amended**: 2026-04-04
