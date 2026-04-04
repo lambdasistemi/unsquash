@@ -12,22 +12,44 @@ The tool operates in two phases on a messy commit sequence:
 
 The tool works on a single commit (skip phase 1) or a commit range / PR (full two-phase workflow).
 
-### II. Mechanical Before Semantic
+### II. Iterative Semantic Classification
 
-Hunk classification is mechanical wherever possible: pure additions, pure deletions, and unchanged-signature body edits can be identified by diff analysis alone. LLM is only invoked for semantic questions: "did this function's API change?", "which callsite hunks belong to this signature change?", "what's the dependency order?", and for phase 1 grouping decisions.
+The core engine is a per-hunk classifier that answers: "why does this change exist?" Each hunk gets tagged with a reason (e.g. "adds constructor `Foo` to type `Bar`", "caller of `baz` updated for new argument `quux`", "import added to make `helper` visible"). Reasons are not predefined categories — they emerge from the code.
 
-### III. Pluggable Components
+The classifier runs in iterative rounds:
+1. **Round 1**: LLM classifies each hunk with surrounding code context. Produces initial reasons — may be vague or inconsistent.
+2. **Round 2+**: LLM sees all hunks again with the accumulated category list as context. Collapses duplicates, merges near-synonymous reasons, reclassifies where needed. Explicitly asks: "are any existing categories actually the same thing?"
+3. **Converge**: Stop when a full round produces zero reclassifications.
+
+Hunks sharing the same root cause form a natural commit cluster. Some hunks may have multiple reasons — these are candidates for sub-hunk splitting.
+
+### III. Hunk Boundaries Are Not Sacred
+
+Git's diff algorithm optimizes for minimal output, not semantic meaning. It may merge unrelated changes into one hunk (e.g. a signature change and an adjacent new function) or cut at awkward boundaries. The tool must not treat git's hunk boundaries as ground truth.
+
+Mitigations:
+- **Split hunks at blank lines** — post-processing pass to break git's hunks at natural boundaries.
+- **Use `patience` or `histogram` diff algorithm** — produces more semantically meaningful breaks than the default Myers algorithm.
+- **Per-hunk multi-reason detection** — if the classifier assigns multiple reasons to a hunk, that hunk may need splitting.
+
+Additionally, "pure additions" at the code level may appear as modifications in the diff: adding an import to an existing import list, adding to an export list, extending a deriving clause, adding a record field. These are **addition-enabling modifications** — they exist solely to make a new addition visible/usable. The classifier must recognize them as belonging to their addition's category, not as independent modifications.
+
+### IV. Mechanical Before Semantic
+
+Where possible, classification is mechanical: new files, new top-level blocks separated by blank lines, and pure deletion hunks can be identified by diff structure alone. The iterative LLM classifier handles everything else.
+
+### V. Pluggable Components
 
 Three pluggable axes:
 - **LLM CLI** — any tool that accepts a prompt on stdin and returns structured output. No hardcoded API.
 - **Compile oracle** — pluggable per language (GHC, cargo, go build, etc.). The oracle is the correctness proof.
 - **VCS** — git for now, but the diff parsing should not assume git internals beyond unified diff format.
 
-### IV. Babashka Orchestration
+### VI. Babashka Orchestration
 
 Babashka owns all state: the diff, the patch sets, the iteration loop, the git operations. The LLM never touches git directly. Babashka calls the LLM CLI as a function: context in, structured JSON out.
 
-### V. Compile-Validated Commits
+### VII. Compile-Validated Commits
 
 Every unfolded commit must compile when prepended to the remaining stack. If it doesn't compile, the extraction was wrong — either too much or too little was extracted. The tool retries by adjusting the hunk assignment (LLM-assisted if needed). Deletions are exempt from compile checks (they're always last).
 
@@ -60,4 +82,4 @@ Every unfolded commit must compile when prepended to the remaining stack. If it 
 
 Constitution supersedes all other practices. Amendments require documentation and user approval.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-04
+**Version**: 1.1.0 | **Ratified**: 2026-04-04 | **Last Amended**: 2026-04-04
