@@ -43,6 +43,22 @@
                             lines))]
     (str header body "\n")))
 
+(defn- make-new-file-patch
+  "Generate a patch for a completely new file by combining all sub-hunks."
+  [file hunks]
+  (let [sorted (sort-by :new-start hunks)
+        all-adds (mapcat (fn [h]
+                           (map :content (filter #(= :add (:type %)) (:lines h))))
+                         sorted)
+        total-lines (count all-adds)
+        body (str/join "\n" (map #(str "+" %) all-adds))]
+    (str "diff --git a/" file " b/" file "\n"
+         "new file mode 100644\n"
+         "--- /dev/null\n"
+         "+++ b/" file "\n"
+         "@@ -0,0 +1," total-lines " @@\n"
+         body "\n")))
+
 (defn- make-patch
   "Generate a full patch string from an atomic unit's hunks."
   [atomic-unit]
