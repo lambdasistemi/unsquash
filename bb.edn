@@ -5,7 +5,22 @@
  {:requires ([babashka.fs :as fs])
 
   test {:doc "Run all tests"
-        :task (exec 'clojure.test/run-tests)}
+        :task (let [test-files (fs/glob "test" "**/*_test.clj")]
+                (if (empty? test-files)
+                  (println "No test files found — skipping.")
+                  (shell "bb" "-e"
+                         (str "(require '[clojure.test :as t])"
+                              "(let [nses (map #(-> (str %) "
+                              "  (clojure.string/replace \"test/\" \"\") "
+                              "  (clojure.string/replace \"/\" \".\") "
+                              "  (clojure.string/replace \"_\" \"-\") "
+                              "  (clojure.string/replace \".clj\" \"\") "
+                              "  symbol) "
+                              "  (babashka.fs/glob \"test\" \"**/*_test.clj\"))] "
+                              "  (doseq [n nses] (require n)) "
+                              "  (let [r (apply t/run-tests nses)] "
+                              "    (when (pos? (+ (:fail r 0) (:error r 0))) "
+                              "      (System/exit 1))))"))))}
 
   analyze {:doc "Analyze a commit or range"
            :task (exec 'unsquash.cli/analyze)}
