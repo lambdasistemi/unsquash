@@ -289,6 +289,28 @@
                                   (str "R14: manifest registers module " mod-name)
                                   :confidence :preflight :rule "R14")))))))
 
+    ;; R15: All manifest changes become the first commit
+    ;; Requires: manifest_files + manifest_first = true
+    ;; All manifest hunks co-occur into one atomic unit. Every source hunk depends
+    ;; on it. Result: one "dependency changes" commit, always first in the ordering.
+    (when (and manifest-globs (:manifest_first profile))
+      (let [manifest-hunks (filter #(matches-manifest? (:file %) manifest-globs) hunks)
+            source-hunks (remove #(matches-manifest? (:file %) manifest-globs) hunks)]
+        (when (seq manifest-hunks)
+          ;; Co-occur all manifest hunks into one unit
+          (doseq [[a b] (partition 2 1 manifest-hunks)]
+            (swap! edges conj
+                   (g/make-edge (:id a) (:id b) :co-occurs
+                                "R15: all manifest changes in one commit"
+                                :confidence :preflight :rule "R15")))
+          ;; Every source hunk depends on the first manifest hunk (representative)
+          (let [rep (:id (first manifest-hunks))]
+            (doseq [sh source-hunks]
+              (swap! edges conj
+                     (g/make-edge (:id sh) rep :depends
+                                  "R15: manifest changes first"
+                                  :confidence :preflight :rule "R15")))))))
+
     @edges))
 
 (defn whitespace-only-hunks

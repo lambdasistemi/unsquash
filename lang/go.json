@@ -15,5 +15,6 @@
   },
 
   "manifest_files": ["go.mod"],
-  "manifest_module_pattern": "^module\\s+(\\S+)"
+  "manifest_module_pattern": "^module\\s+(\\S+)",
+  "manifest_first": true
 }

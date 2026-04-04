@@ -32,6 +32,7 @@ graph TD
 | R8 | Whitespace-only | (strip) | universal |
 | R13 | Cross-file import | `:depends` | profile |
 | R14 | Manifest module registration | `:co-occurs` | profile |
+| R15 | Manifest changes first | `:depends` + `:co-occurs` | profile + `manifest_first` |
 
 ## Rule details
 
