@@ -25,9 +25,37 @@ The compile oracle validates every step. The user picks the commit narrative fro
 - **LLM CLI** (pluggable) — semantic edge discovery, commit grouping, intermediate state synthesis
 - **Compile oracle** (pluggable) — per-language build validation (GHC, cargo, go, tsc, etc.)
 
+## Development
+
+```bash
+nix develop          # enter dev shell (babashka, git, just, stgit)
+just ci              # run full CI pipeline
+just test            # run tests
+cp unsquash.example.edn unsquash.edn  # configure oracle + LLM
+```
+
+## Usage
+
+```bash
+# Analyze a single commit
+bb analyze --ref HEAD --oracle "cabal build all -O0" --llm "llm chat -m claude-sonnet"
+
+# Propose orderings
+bb propose --max 3
+
+# Apply chosen ordering
+bb apply --ordering 0
+
+# Consolidate messy commit range (full two-phase)
+bb consolidate --ref main..feature --llm "llm chat -m claude-sonnet"
+
+# Start MCP server (for Claude Code integration)
+bb mcp
+```
+
 ## Status
 
-Design phase complete. See [issue tracker](https://github.com/lambdasistemi/unsquash/issues) for implementation progress.
+Implementation in progress. See [issue tracker](https://github.com/lambdasistemi/unsquash/issues) for progress.
 
 ## Documentation
 
