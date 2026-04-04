@@ -16,7 +16,7 @@ Build an MCP tool that takes a messy commit sequence (or single squashed commit)
 **Target Platform**: Linux (primary), macOS (secondary). Runs where bb and git are available.
 **Project Type**: CLI tool + MCP server
 **Performance Goals**: Process a 500-line diff within 10 minutes including oracle calls (SC-001)
-**Constraints**: LLM calls are the bottleneck — minimize round-trips. Preflight rules should handle 40%+ of hunks mechanically (SC-002).
+**Constraints**: LLM calls are the bottleneck — minimize round-trips. Structural preflight + LLM semantic preflight should classify 80%+ of hunks before iterative refinement (SC-002). With a language plugin, structural preflight alone should handle 40%+.
 **Scale/Scope**: Single-user CLI tool. Diffs up to ~2000 lines. Not designed for monorepo-scale changes.
 
 ## Constitution Check
