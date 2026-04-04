@@ -30,7 +30,7 @@ Build an MCP tool that takes a messy commit sequence (or single squashed commit)
 | III. LLM Synthesizes Intermediate States | PASS | FR-007 covers this; deferred to later iteration |
 | IV. Two-Tier Oracle | PASS | Full build oracle first; LSP tier is future enhancement |
 | V. Hunk Boundaries Not Sacred | PASS | Hunk splitting at blank lines + patience diff in plan |
-| VI. Preflight Codebook | PASS | R1–R12 implemented as mechanical rules |
+| VI. Preflight Rules | PASS | Universal structural rules (language-agnostic) + optional language plugins. R1–R5,R9 moved to Haskell plugin. |
 | VII. Pluggable Components | PASS | LLM CLI, oracle, VCS all pluggable via config |
 | VIII. Babashka Orchestration | PASS | bb owns all state, LLM is a function |
 | IX. Compile-Validated Commits | PASS | Oracle validates each commit in sequence |
