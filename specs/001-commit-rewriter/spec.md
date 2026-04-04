@@ -79,7 +79,7 @@ After the dependency graph is built, multiple valid topological orderings exist.
 - **FR-009**: System MUST preserve the invariant that the final state after all commits equals the original diff — no code is gained or lost.
 - **FR-010**: System MUST support pluggable compile oracles (different per language/project).
 - **FR-011**: System MUST support pluggable LLM backends via a CLI interface (prompt in, structured response out).
-- **FR-012**: System MUST grow the preflight rule codebook over time — recurring patterns discovered by the LLM should be promotable to mechanical rules.
+- **FR-012**: System MUST support growing the preflight rule codebook over time — recurring patterns discovered by the LLM may be promoted to language plugin rules, expanding the deterministic layer for that language.
 
 ### Key Entities
 
