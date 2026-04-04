@@ -1,10 +1,10 @@
-# diff-peel Constitution
+# unsquash Constitution
 
 ## Core Principles
 
-### I. Iterative Peeling
+### I. Iterative Unfolding
 
-The algorithm works from the periphery to the center. Pure additions are peeled first (zero conflict risk), then internal rewrites (same API), then API changes (with callsite fallout), then deletions (always last). Each iteration shrinks the remaining diff. The compile oracle validates every peeled commit.
+The algorithm works from the periphery to the center. Pure additions are extracted first (zero conflict risk), then internal rewrites (same API), then API changes (with callsite fallout), then deletions (always last). Each iteration shrinks the remaining diff. The compile oracle validates every unfolded commit.
 
 ### II. Mechanical Before Semantic
 
@@ -23,7 +23,7 @@ Babashka owns all state: the diff, the patch sets, the iteration loop, the git o
 
 ### V. Compile-Validated Commits
 
-Every peeled commit must compile when prepended to the remaining stack. If it doesn't compile, the peel was wrong — either too much or too little was extracted. The tool retries by adjusting the hunk assignment (LLM-assisted if needed). Deletions are exempt from compile checks (they're always last).
+Every unfolded commit must compile when prepended to the remaining stack. If it doesn't compile, the extraction was wrong — either too much or too little was extracted. The tool retries by adjusting the hunk assignment (LLM-assisted if needed). Deletions are exempt from compile checks (they're always last).
 
 ## Commit Discipline
 
@@ -45,7 +45,7 @@ Every peeled commit must compile when prepended to the remaining stack. If it do
 
 ## Quality Gates
 
-- All peeled commits must pass the compile oracle (except trailing deletions)
+- All unfolded commits must pass the compile oracle (except trailing deletions)
 - Hunk classification must be deterministic for mechanical categories
 - LLM prompts must have defined JSON schemas for responses
 - The tool must fail loudly on unclassifiable hunks rather than silently misclassify

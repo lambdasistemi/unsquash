@@ -1,15 +1,15 @@
-# diff-peel
+# unsquash
 
-MCP tool for peeling squashed diffs into logical commit sequences.
+MCP tool for unfolding squashed diffs into logical commit sequences.
 
-Given a squashed diff, mechanically decomposes it into an ordered series of commits:
+Given a squashed commit, decomposes it into an ordered series of sub-commits:
 
 1. **Pure additions** — new types, functions, modules
 2. **Internal rewrites** — same API, different body
 3. **API changes** — signature change + all callsite updates
 4. **Deletions** — dead code removal
 
-Each peeled commit compiles independently. A compile oracle validates each step.
+Each unfolded commit compiles independently. A compile oracle validates each step.
 
 ## Stack
 
