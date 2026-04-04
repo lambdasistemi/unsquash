@@ -72,8 +72,8 @@
           result)
         (let [line (first ls)]
           (cond
-            ;; --- line: start of a file diff
-            (str/starts-with? line "--- ")
+            ;; --- line: start of a file diff (must be "--- a/" or "--- /dev/null")
+            (re-matches #"^--- (?:a/|/dev/null).*" line)
             (let [plus-line (second ls)
                   new-file (when plus-line (parse-file-header line plus-line))
                   ;; flush previous file
@@ -97,11 +97,13 @@
             (str/starts-with? line "@@")
             (let [header (parse-hunk-header line)]
               (if header
-                ;; collect lines until next @@ or --- or diff --git or EOF
+                ;; collect lines until next @@ or file header or EOF
+                ;; Note: "--- " alone is ambiguous (could be a removed line like "--- comment")
+                ;; File headers are "--- a/" or "--- /dev/null", not "--- " + arbitrary content
                 (let [hunk-lines (take-while
                                   #(not (or (str/starts-with? % "@@")
                                             (str/starts-with? % "diff --git")
-                                            (str/starts-with? % "--- ")))
+                                            (re-matches #"^--- (?:a/|/dev/null).*" %)))
                                   (rest ls))
                       classified (mapv classify-line hunk-lines)
                       with-nums (assign-line-numbers classified
