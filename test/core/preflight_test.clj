@@ -191,6 +191,44 @@
       (is (some? profile))
       (is (= "rust" (:name profile))))))
 
+;; --- R15: manifest dependency changes come first ---
+
+(deftest r15-cabal-before-source
+  (testing "R15: cabal hunk with additions comes before all .hs source hunks"
+    (let [h-cabal {:id "mylib.cabal:5-8" :file "mylib.cabal" :old-count 3
+                   :lines [{:type :add :content "    , containers >= 0.6"}]}
+          h-src1 {:id "src/Foo.hs:10-15" :file "src/Foo.hs" :old-count 5
+                  :lines [{:type :add :content "import Data.Map"}]}
+          h-src2 {:id "src/Bar.hs:3-7" :file "src/Bar.hs" :old-count 5
+                  :lines [{:type :add :content "import Data.Set"}]}
+          edges (pf/discover-edges [h-cabal h-src1 h-src2] :profile haskell-profile)
+          r15-edges (filter #(= "R15" (:rule %)) edges)]
+      (is (= 2 (count r15-edges)) "Each source hunk should depend on the cabal hunk")
+      (is (every? #(= (:to %) "mylib.cabal:5-8") r15-edges)
+          "All R15 edges should point to the manifest hunk"))))
+
+(deftest r15-cargo-before-source
+  (testing "R15: Cargo.toml hunk comes before all .rs source hunks"
+    (let [h-cargo {:id "Cargo.toml:10-12" :file "Cargo.toml" :old-count 3
+                   :lines [{:type :add :content "serde = \"1.0\""}]}
+          h-src {:id "src/main.rs:5-8" :file "src/main.rs" :old-count 5
+                 :lines [{:type :add :content "use serde::Serialize;"}]}
+          edges (pf/discover-edges [h-cargo h-src] :profile rust-profile)
+          r15-edges (filter #(= "R15" (:rule %)) edges)]
+      (is (= 1 (count r15-edges)))
+      (is (= "src/main.rs:5-8" (:from (first r15-edges))))
+      (is (= "Cargo.toml:10-12" (:to (first r15-edges)))))))
+
+(deftest r15-no-edge-without-additions
+  (testing "R15: manifest hunk with only removals doesn't create R15 edges"
+    (let [h-cabal {:id "mylib.cabal:5-8" :file "mylib.cabal" :old-count 3
+                   :lines [{:type :remove :content "    , old-dep >= 0.1"}]}
+          h-src {:id "src/Foo.hs:10-15" :file "src/Foo.hs" :old-count 5
+                 :lines [{:type :remove :content "import OldDep"}]}
+          edges (pf/discover-edges [h-cabal h-src] :profile haskell-profile)
+          r15-edges (filter #(= "R15" (:rule %)) edges)]
+      (is (empty? r15-edges) "No R15 edges for removal-only manifest hunks"))))
+
 ;; --- Multi-language profile tests ---
 
 (defn- r13-test

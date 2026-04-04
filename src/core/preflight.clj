@@ -289,6 +289,39 @@
                                   (str "R14: manifest registers module " mod-name)
                                   :confidence :preflight :rule "R14")))))))
 
+    ;; R15: Manifest dependency changes come before sibling source hunks
+    ;; Requires: manifest_files
+    ;; For each manifest file with additions, source hunks in the same directory
+    ;; subtree depend on the manifest. This scopes R15 to per-package in monorepos.
+    (when manifest-globs
+      (let [manifest-hunks (filter #(and (matches-manifest? (:file %) manifest-globs)
+                                         (seq (add-lines %)))
+                                   hunks)
+            source-hunks (remove #(matches-manifest? (:file %) manifest-globs) hunks)
+            ;; Group manifest hunks by file
+            manifest-by-file (group-by :file manifest-hunks)
+            ;; Extract directory prefix from a manifest file path
+            manifest-dir (fn [f] (let [idx (str/last-index-of f "/")]
+                                   (if idx (subs f 0 (inc idx)) "")))]
+        ;; R15a: co-occur all manifest hunks within the same file
+        (doseq [[_ file-hunks] manifest-by-file
+                :when (> (count file-hunks) 1)]
+          (doseq [[a b] (partition 2 1 file-hunks)]
+            (swap! edges conj
+                   (g/make-edge (:id a) (:id b) :co-occurs
+                                (str "R15: manifest hunks in " (:file a) " co-occur")
+                                :confidence :preflight :rule "R15"))))
+        ;; R15b: source hunks depend on their package's manifest representative
+        (doseq [[mfile file-hunks] manifest-by-file
+                :let [rep (first file-hunks)
+                      mdir (manifest-dir mfile)]]
+          (doseq [sh source-hunks
+                  :when (str/starts-with? (or (:file sh) "") mdir)]
+            (swap! edges conj
+                   (g/make-edge (:id sh) (:id rep) :depends
+                                (str "R15: manifest " mfile " before source")
+                                :confidence :preflight :rule "R15"))))))
+
     @edges))
 
 (defn whitespace-only-hunks
