@@ -12,28 +12,46 @@ The tool operates in two phases on a messy commit sequence:
 
 The tool works on a single commit (skip phase 1) or a commit range / PR (full two-phase workflow).
 
-### II. Three-Layer Classification
+### II. The Output Is a Dependency Graph
 
-The hunk classifier operates in three layers, each reducing work for the next:
+The tool's core data structure is a **dependency graph** where:
 
-**Layer 1 — Preflight (mechanical, no LLM).** Deterministic rules applied to raw diff structure. Each rule tags hunks with a candidate category and confidence level. Hunks matching these rules are pre-tagged before the LLM sees them. See `docs/hunk-zoo.md` for the full rule catalog (R1–R12). Examples:
-- R1: Export of name defined in same diff → `addition:wiring`
-- R3: Import list is strict superset of old → `addition:wiring`
-- R5: Wildcard count change in pattern match → `addition:wiring:mechanical`
-- R8: Whitespace-only line change → `formatting` (strip before classification)
+- **Nodes** = hunks (or sub-hunks after splitting)
+- **Edges** = two kinds:
+  - **Depends on** (directed) — hunk B needs hunk A to exist first. A compiles without B, but not vice versa. Example: function definition A, then caller B.
+  - **Co-occurs with** (undirected) — hunk A and hunk B are meaningless without each other. Neither compiles alone. Example: using `newThing` in code and `import Foo (newThing)`.
 
-For high-confidence preflight tags (R4 trailing comma, R5 wildcards, R8 whitespace), the LLM may never need to see the hunk at all.
+**Co-occurrence groups contract into atomic units.** Before any ordering, all co-occurring hunks merge into single graph nodes. Each atomic unit has a **semantic identity** — a named category describing what it represents:
 
-**Layer 2 — LLM confirmation.** For preflight-tagged hunks where confidence is moderate, the LLM validates: "this hunk was pre-classified as `addition:wiring` because the import list is a strict superset. Does that look right?" Cheap, narrow question.
+- `define:Foo` = type definition + export + deriving instances
+- `use:Foo:ModuleX` = import of `Foo` in module X + every usage of `Foo` in that module
+- `api-change:bar:new-arg` = signature change + all callsite updates
 
-**Layer 3 — LLM classification with iterative refinement.** For untagged hunks or low-confidence preflight, the LLM answers: "why does this change exist?" Each hunk gets tagged with a reason (e.g. "adds constructor `Foo` to type `Bar`", "caller of `baz` updated for new argument `quux`"). Reasons are not predefined categories — they emerge from the code.
+The dependency edges between atomic units give the topological order. `use:Foo:ModuleX` **depends on** `define:Foo`. Different valid topological sorts produce different commit narratives — all compile, but tell different stories.
 
-The classifier runs in iterative rounds:
-1. **Round 1**: LLM classifies each hunk with surrounding code context and any preflight tags. Produces initial reasons — may be vague or inconsistent.
-2. **Round 2+**: LLM sees all hunks again with the accumulated category list as context. Collapses duplicates, merges near-synonymous reasons, reclassifies where needed. Explicitly asks: "are any existing categories actually the same thing?"
-3. **Converge**: Stop when a full round produces zero reclassifications.
+**The user picks the path.** The tool presents the valid orderings (or the LLM proposes one with narrative reasoning). The user approves. Then the chosen path flattens into commits — each atomic unit (or group of independent units) becomes one commit.
 
-Hunks sharing the same root cause form a natural commit cluster. Some hunks may have multiple reasons — these are candidates for sub-hunk splitting.
+### III. Three-Layer Edge Discovery
+
+Discovering the graph edges operates in three layers, each reducing work for the next:
+
+**Layer 1 — Preflight (mechanical, no LLM).** Deterministic rules applied to raw diff structure. Each rule discovers edges between hunks. See `docs/hunk-zoo.md` for the full rule catalog (R1–R12). Examples:
+- R1: Export of name defined in same diff → **co-occurrence** edge (export ↔ definition)
+- R2: Import of name used only in new code → **co-occurrence** edge (import ↔ usage)
+- R3: Import list is strict superset of old → **co-occurrence** edge (import ↔ usage)
+- R5: Wildcard count change in pattern match → **co-occurrence** edge (pattern ↔ field addition)
+- R8: Whitespace-only line change → **no edges** (strip before classification)
+
+For high-confidence preflight edges (R4 trailing comma, R5 wildcards, R8 whitespace), the LLM may never need to see the hunks at all.
+
+**Layer 2 — LLM confirmation.** For preflight-discovered edges where confidence is moderate, the LLM validates: "these two hunks were linked because the import list is a strict superset. Does that look right?"
+
+**Layer 3 — LLM edge discovery with iterative refinement.** For hunks with no preflight edges, the LLM answers: "why does this change exist, and which other hunks is it related to?" The LLM discovers both dependency and co-occurrence edges.
+
+The discovery runs in iterative rounds:
+1. **Round 1**: LLM examines each unlinked hunk with surrounding code context and any preflight edges. Proposes edges — may be vague or inconsistent.
+2. **Round 2+**: LLM sees all hunks again with the accumulated graph as context. Merges near-synonymous atomic units, discovers missed edges, reclassifies where needed. Explicitly asks: "are any existing atomic units actually the same thing?"
+3. **Converge**: Stop when a full round produces zero new edges or reclassifications.
 
 ### III. Hunk Boundaries Are Not Sacred
 
@@ -48,7 +66,7 @@ Additionally, "pure additions" at the code level may appear as modifications in 
 
 ### IV. Preflight Rules Are a Codebook
 
-The preflight rules (R1–R12) form a growing codebook maintained in `docs/hunk-zoo.md`. Each rule is a pattern learned from real diffs. When the LLM encounters a new recurring pattern during classification, it should be promoted to a preflight rule — expanding the mechanical layer and reducing future LLM calls.
+The preflight rules (R1–R12) form a growing codebook maintained in `docs/hunk-zoo.md`. Each rule is a pattern learned from real diffs that mechanically discovers edges (dependency or co-occurrence). When the LLM encounters a new recurring edge pattern during discovery, it should be promoted to a preflight rule — expanding the mechanical layer and reducing future LLM calls.
 
 ### V. Pluggable Components
 
@@ -94,4 +112,4 @@ Every unfolded commit must compile when prepended to the remaining stack. If it 
 
 Constitution supersedes all other practices. Amendments require documentation and user approval.
 
-**Version**: 1.2.0 | **Ratified**: 2026-04-04 | **Last Amended**: 2026-04-04
+**Version**: 1.3.0 | **Ratified**: 2026-04-04 | **Last Amended**: 2026-04-04
