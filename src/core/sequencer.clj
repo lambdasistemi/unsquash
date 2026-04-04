@@ -49,9 +49,13 @@
   (let [hunks-by-file (group-by :file (:hunks atomic-unit))]
     (str/join "\n"
               (for [[file hunks] hunks-by-file]
-                (str "diff --git a/" file " b/" file "\n"
-                     (str/join "" (map apply-hunk-lines
-                                      (sort-by :old-start hunks))))))))
+                (let [is-new (every? new-file? hunks)
+                      is-del (every? deleted-file? hunks)]
+                  (str "diff --git a/" file " b/" file "\n"
+                       (when is-new "new file mode 100644\n")
+                       (when is-del "deleted file mode 100644\n")
+                       (str/join "" (map apply-hunk-lines
+                                        (sort-by :old-start hunks)))))))))
 
 (defn apply-atomic-unit
   "Apply an atomic unit as a git commit.
