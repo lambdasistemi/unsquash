@@ -16,5 +16,22 @@ jobs:
     runs-on: nixos
     steps:
       - uses: actions/checkout@v4
-      - name: Stub CI
-        run: echo "CI stub — will be replaced by real CI"
+      - uses: cachix/cachix-action@v15
+        with:
+          name: paolino
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Build dev shell
+        run: nix develop --quiet --command echo "Dev shell OK"
+
+  test:
+    name: Test
+    needs: build-gate
+    runs-on: nixos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/cachix-action@v15
+        with:
+          name: paolino
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Run tests
+        run: nix develop --quiet -c just ci
