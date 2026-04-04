@@ -94,7 +94,7 @@ After the dependency graph is built, multiple valid topological orderings exist.
 ### Measurable Outcomes
 
 - **SC-001**: Given a squashed commit of up to 500 changed lines, the tool produces a valid commit sequence where each commit compiles, within 10 minutes (including oracle calls).
-- **SC-002**: The preflight rules correctly classify at least 40% of hunks without LLM involvement (measured across the hunk zoo test fixtures).
+- **SC-002**: The structural preflight + LLM semantic preflight (Layers 1+2) correctly classify at least 80% of hunks before iterative refinement (Layer 3). With a language plugin active, the structural preflight alone (Layer 1) classifies at least 40%.
 - **SC-003**: The final state after applying all produced commits is byte-identical to the original diff application.
 - **SC-004**: For commit sequences of 5+ commits, the tool converges (zero reclassifications) within 4 LLM refinement rounds.
 - **SC-005**: A developer unfamiliar with the original code can follow the produced commit sequence and understand the change rationale from commit messages alone.
