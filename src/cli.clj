@@ -31,10 +31,18 @@
     (deref proc 30000 nil)
     (str/trim (slurp (:out proc)))))
 
-(defn- get-diff [ref]
-  (if (str/includes? ref "..")
-    (git "diff" ref)
-    (git "diff" (str ref "~1") ref)))
+(defn- get-diff
+  "Get diff for a ref or range. Supports --diff-algorithm."
+  ([ref] (get-diff ref nil))
+  ([ref diff-algorithm]
+   (let [algo-flag (when diff-algorithm (str "--diff-algorithm=" diff-algorithm))]
+     (if (str/includes? ref "..")
+       (if algo-flag
+         (git "diff" algo-flag ref)
+         (git "diff" ref))
+       (if algo-flag
+         (git "diff" algo-flag (str ref "~1") ref)
+         (git "diff" (str ref "~1") ref))))))
 
 ;; --- Analyze (T020) ---
 
@@ -46,7 +54,8 @@
         config (load-config)
         oracle-cmd (or (get opts "--oracle") (get-in config [:oracle :command]))
         llm-cmd (or (get opts "--llm") (get-in config [:llm :command]))
-        diff-text (get-diff ref)
+        diff-algo (or (get opts "--diff-algorithm") (get-in config [:diff :algorithm]))
+        diff-text (get-diff ref diff-algo)
         ;; Parse and split
         file-diffs (dp/parse-diff diff-text)
         split-diffs (hs/split-all-hunks file-diffs)
