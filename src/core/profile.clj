@@ -64,15 +64,21 @@
 
 (defn file-path-to-module
   "Convert a file path to a module name using the profile's module_to_path transform.
+   Handles monorepo layouts by finding the prefix anywhere in the path (not just at start).
    Returns nil if no module_to_path in profile or no prefix matches."
   [profile file-path]
   (when-let [mtp (:module_to_path profile)]
     (let [{:keys [strip_prefixes separator path_separator suffix]} mtp
-          ;; Try each prefix, use first match
-          stripped (some (fn [prefix]
-                          (when (str/starts-with? file-path prefix)
-                            (subs file-path (count prefix))))
-                        strip_prefixes)]
+          ;; Try each prefix: first at start, then anywhere in the path (monorepo support)
+          stripped (or (some (fn [prefix]
+                              (when (str/starts-with? file-path prefix)
+                                (subs file-path (count prefix))))
+                            strip_prefixes)
+                      (some (fn [prefix]
+                              (let [idx (str/index-of file-path prefix)]
+                                (when idx
+                                  (subs file-path (+ idx (count prefix))))))
+                            strip_prefixes))]
       (when stripped
         (-> stripped
             (str/replace (re-pattern (str (java.util.regex.Pattern/quote suffix) "$")) "")
