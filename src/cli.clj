@@ -9,7 +9,8 @@
             [core.graph :as g]
             [core.sequencer :as seq]
             [llm.classifier :as llm]
-            [oracle.compile :as oracle]))
+            [oracle.compile :as oracle]
+            [consolidate.smart-squash :as sq]))
 
 ;; --- Config ---
 
@@ -115,7 +116,42 @@
       (doseq [[i ordering] (map-indexed vector orderings)]
         (println (str "\n[" i "] "
                       (str/join " → "
-                                (map #(:identity (get-in graph [:nodes %])) ordering))))))))
+                                (map #(:identity (get-in graph [:nodes %])) ordering)))))
+      ;; Interactive selection (T032)
+      (when (> (count orderings) 1)
+        (print "\nChoose ordering [0]: ")
+        (flush)
+        (let [choice (try (parse-long (str/trim (or (read-line) "0")))
+                          (catch Exception _ 0))]
+          (println (str "Selected ordering " choice))
+          choice)))))
+
+;; --- Consolidate (T027) ---
+
+(defn consolidate
+  "Smart-squash a commit range."
+  [& args]
+  (let [opts (apply hash-map args)
+        ref (or (get opts "--ref") "HEAD~5..HEAD")
+        config (load-config)
+        llm-cmd (or (get opts "--llm") (get-in config [:llm :command]))
+        llm-fn (when llm-cmd (llm/llm-from-config {:command llm-cmd}))
+        dir "."
+        commits (sq/parse-commit-range dir ref)]
+    (println (str "Found " (count commits) " commits in " ref))
+    (let [groups (if llm-fn
+                   (sq/group-commits llm-fn commits)
+                   ;; Without LLM, each commit stays alone
+                   (mapv (fn [c] {:shas [(:sha c)]
+                                  :reason "standalone"
+                                  :proposed_message (:message c)})
+                         commits))]
+      (println (json/generate-string
+                {:groups groups
+                 :original-count (count commits)
+                 :proposed-count (count groups)}
+                {:pretty true}))
+      groups)))
 
 ;; --- Apply (T022) ---
 
