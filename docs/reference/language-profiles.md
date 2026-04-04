@@ -17,10 +17,16 @@ When no profile is active, only universal rules fire.
 
 ## Shipped profiles
 
-| Profile | File | Extensions | Full coverage |
-|---------|------|-----------|---------------|
+| Profile | File | Extensions | Rules |
+|---------|------|-----------|-------|
 | Haskell | `lang/haskell.json` | `.hs`, `.lhs` | R1, R3, R5, R13, R14 |
 | Rust | `lang/rust.json` | `.rs` | R1, R3, R5, R13, R14 |
+| Python | `lang/python.json` | `.py` | R1, R3, R13, R14 |
+| TypeScript | `lang/typescript.json` | `.ts`, `.tsx` | R1, R3, R13, R14 |
+| Go | `lang/go.json` | `.go` | R1, R3, R13, R14 |
+| Java | `lang/java.json` | `.java` | R1, R3, R13, R14 |
+| C# | `lang/csharp.json` | `.cs` | R1, R3, R13, R14 |
+| Ruby | `lang/ruby.json` | `.rb` | R1, R3, R13, R14 |
 
 ## Configuration
 

@@ -1,0 +1,19 @@
+{
+  "name": "typescript",
+  "file_extensions": [".ts", ".tsx"],
+
+  "import_pattern": "^import\\s+.*?from\\s+['\"]([^'\"]+)['\"]",
+  "export_pattern": "^export\\s+(?:\\{|default|function|class|const|type|interface|enum)",
+  "export_name_pattern": "(?:export\\s+(?:default\\s+)?(?:function|class|const|let|var|type|interface|enum)\\s+)(\\w+)",
+  "definition_pattern": "^(?:export\\s+)?(?:function|class|const|let|var|type|interface|enum)\\s+(\\w+)",
+
+  "module_to_path": {
+    "strip_prefixes": ["src/", "lib/"],
+    "separator": "/",
+    "path_separator": "/",
+    "suffix": ".ts"
+  },
+
+  "manifest_files": ["package.json"],
+  "manifest_module_pattern": "\"main\"\\s*:\\s*\"([^\"]+)\""
+}

@@ -1,0 +1,19 @@
+{
+  "name": "java",
+  "file_extensions": [".java"],
+
+  "import_pattern": "^import\\s+(?:static\\s+)?([A-Za-z][A-Za-z0-9_.]*)",
+  "export_pattern": "^public\\s+(?:class|interface|enum|record|abstract\\s+class)",
+  "export_name_pattern": "(?:class|interface|enum|record)\\s+([A-Z][A-Za-z0-9_]*)",
+  "definition_pattern": "^\\s*(?:public|private|protected)?\\s*(?:static\\s+)?(?:class|interface|enum|record|void|\\w+)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*[({<]",
+
+  "module_to_path": {
+    "strip_prefixes": ["src/main/java/", "src/test/java/", "src/"],
+    "separator": "/",
+    "path_separator": ".",
+    "suffix": ".java"
+  },
+
+  "manifest_files": ["pom.xml", "build.gradle", "build.gradle.kts"],
+  "manifest_module_pattern": "<artifactId>([^<]+)</artifactId>"
+}

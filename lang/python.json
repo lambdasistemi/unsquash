@@ -1,0 +1,19 @@
+{
+  "name": "python",
+  "file_extensions": [".py"],
+
+  "import_pattern": "^(?:from\\s+(\\S+)|import\\s+(\\S+))",
+  "export_pattern": "^__all__\\s*=",
+  "export_name_pattern": "['\"]([A-Za-z_][A-Za-z0-9_]*)['\"]",
+  "definition_pattern": "^(?:def|class)\\s+(\\w+)",
+
+  "module_to_path": {
+    "strip_prefixes": ["src/", "lib/"],
+    "separator": "/",
+    "path_separator": ".",
+    "suffix": ".py"
+  },
+
+  "manifest_files": ["setup.py", "setup.cfg", "pyproject.toml"],
+  "manifest_module_pattern": "(?:packages\\s*=|\\[tool\\.setuptools\\.packages\\.find\\]).*?['\"]([A-Za-z_][A-Za-z0-9_.]*)['\"]"
+}

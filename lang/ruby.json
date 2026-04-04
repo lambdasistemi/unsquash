@@ -1,0 +1,19 @@
+{
+  "name": "ruby",
+  "file_extensions": [".rb"],
+
+  "import_pattern": "^require(?:_relative)?\\s+['\"]([^'\"]+)['\"]",
+  "export_pattern": "^\\s*(?:module|class)\\s+[A-Z]",
+  "export_name_pattern": "(?:module|class)\\s+([A-Z][A-Za-z0-9_:]*)",
+  "definition_pattern": "^\\s*(?:def|class|module)\\s+([A-Za-z_][A-Za-z0-9_!?]*)",
+
+  "module_to_path": {
+    "strip_prefixes": ["lib/", "app/"],
+    "separator": "/",
+    "path_separator": "/",
+    "suffix": ".rb"
+  },
+
+  "manifest_files": ["Gemfile", "*.gemspec"],
+  "manifest_module_pattern": "spec\\.name\\s*=\\s*['\"]([^'\"]+)['\"]"
+}
