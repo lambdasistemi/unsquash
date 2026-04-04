@@ -1,0 +1,19 @@
+{
+  "name": "csharp",
+  "file_extensions": [".cs"],
+
+  "import_pattern": "^using\\s+([A-Za-z][A-Za-z0-9_.]*)",
+  "export_pattern": "^\\s*(?:public|internal)\\s+(?:partial\\s+)?(?:class|interface|struct|enum|record|delegate)",
+  "export_name_pattern": "(?:class|interface|struct|enum|record|delegate)\\s+([A-Z][A-Za-z0-9_]*)",
+  "definition_pattern": "^\\s*(?:public|private|protected|internal)?\\s*(?:static\\s+)?(?:partial\\s+)?(?:class|interface|struct|enum|record|void|\\w+)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*[({<]",
+
+  "module_to_path": {
+    "strip_prefixes": ["src/", "Source/"],
+    "separator": "/",
+    "path_separator": ".",
+    "suffix": ".cs"
+  },
+
+  "manifest_files": ["*.csproj", "*.sln"],
+  "manifest_module_pattern": "<RootNamespace>([^<]+)</RootNamespace>"
+}

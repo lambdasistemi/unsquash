@@ -190,3 +190,77 @@
     (let [profile (prof/resolve-profile {:language-profile "lang/rust.json"} [])]
       (is (some? profile))
       (is (= "rust" (:name profile))))))
+
+;; --- Multi-language profile tests ---
+
+(defn- r13-test
+  "Generic R13 test: new file + import in another file → dependency edge."
+  [profile new-file import-file import-line]
+  (let [h-new {:id (str new-file ":0-5") :file new-file :old-count 0
+               :lines [{:type :add :content "placeholder"}]}
+        h-import {:id (str import-file ":3-5") :file import-file :old-count 5
+                  :lines [{:type :add :content import-line}]}
+        edges (pf/discover-edges [h-new h-import] :profile profile)]
+    (some #(and (= :depends (:kind %)) (= "R13" (:rule %))) edges)))
+
+(defn- load-lang [name]
+  (prof/validate-profile (prof/load-profile (str "lang/" name ".json"))))
+
+(deftest python-r13
+  (testing "Python: from utils.parser import Parser → depends on new module"
+    (let [py (load-lang "python")]
+      (is (r13-test py "src/utils/parser.py" "src/main.py" "from utils.parser import Parser")))))
+
+(deftest typescript-r13
+  (testing "TypeScript: import { Foo } from 'utils' → depends on new module"
+    (let [ts (load-lang "typescript")]
+      (is (r13-test ts "src/utils.ts" "src/main.ts" "import { Foo } from 'utils'")))))
+
+(deftest go-r13
+  (testing "Go: import \"utils\" → depends on new module in pkg/"
+    (let [go (load-lang "go")]
+      (is (r13-test go "pkg/utils.go" "cmd/main.go" "	\"utils\"")))))
+
+(deftest java-r13
+  (testing "Java: import com.example.Utils → depends on new module"
+    (let [java (load-lang "java")]
+      (is (r13-test java
+                    "src/main/java/com/example/Utils.java"
+                    "src/main/java/com/example/Main.java"
+                    "import com.example.Utils;")))))
+
+(deftest csharp-r13
+  (testing "C#: using MyApp.Utils → depends on new module"
+    (let [cs (load-lang "csharp")]
+      (is (r13-test cs "src/MyApp/Utils.cs" "src/MyApp/Main.cs" "using MyApp.Utils;")))))
+
+(deftest ruby-r13
+  (testing "Ruby: require_relative 'utils/parser' → depends on new module"
+    (let [rb (load-lang "ruby")]
+      (is (r13-test rb "lib/utils/parser.rb" "lib/main.rb" "require_relative 'utils/parser'")))))
+
+;; Auto-detection for all shipped profiles
+
+(deftest auto-detect-python
+  (testing "Auto-detect Python from .py extensions"
+    (is (= "python" (:name (prof/detect-language [{:file "src/main.py"} {:file "src/utils.py"}]))))))
+
+(deftest auto-detect-typescript
+  (testing "Auto-detect TypeScript from .ts extensions"
+    (is (= "typescript" (:name (prof/detect-language [{:file "src/app.ts"} {:file "src/utils.ts"}]))))))
+
+(deftest auto-detect-go
+  (testing "Auto-detect Go from .go extensions"
+    (is (= "go" (:name (prof/detect-language [{:file "main.go"} {:file "pkg/utils.go"}]))))))
+
+(deftest auto-detect-java
+  (testing "Auto-detect Java from .java extensions"
+    (is (= "java" (:name (prof/detect-language [{:file "src/Main.java"} {:file "src/Utils.java"}]))))))
+
+(deftest auto-detect-csharp
+  (testing "Auto-detect C# from .cs extensions"
+    (is (= "csharp" (:name (prof/detect-language [{:file "src/Main.cs"} {:file "src/Utils.cs"}]))))))
+
+(deftest auto-detect-ruby
+  (testing "Auto-detect Ruby from .rb extensions"
+    (is (= "ruby" (:name (prof/detect-language [{:file "lib/main.rb"} {:file "lib/utils.rb"}]))))))

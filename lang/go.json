@@ -1,0 +1,19 @@
+{
+  "name": "go",
+  "file_extensions": [".go"],
+
+  "import_pattern": "^\\s*\"([^\"]+)\"",
+  "export_pattern": "^func\\s+[A-Z]|^type\\s+[A-Z]|^var\\s+[A-Z]|^const\\s+[A-Z]",
+  "export_name_pattern": "(?:func|type|var|const)\\s+([A-Z][A-Za-z0-9_]*)",
+  "definition_pattern": "^(?:func|type|var|const)\\s+(\\w+)",
+
+  "module_to_path": {
+    "strip_prefixes": ["internal/", "pkg/", "cmd/"],
+    "separator": "/",
+    "path_separator": "/",
+    "suffix": ".go"
+  },
+
+  "manifest_files": ["go.mod"],
+  "manifest_module_pattern": "^module\\s+(\\S+)"
+}
