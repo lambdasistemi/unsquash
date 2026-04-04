@@ -69,7 +69,7 @@ After the dependency graph is built, multiple valid topological orderings exist.
 ### Functional Requirements
 
 - **FR-001**: System MUST parse unified diffs and decompose them into individual hunks.
-- **FR-002**: System MUST apply preflight rules (mechanical pattern matching) to discover edges between hunks before invoking any external classifier.
+- **FR-002**: System MUST apply language-agnostic structural preflight (whitespace stripping, blank-line splitting, systematic patterns, proximity, new/deleted file detection, content moves) before any LLM call. System MAY load optional language plugins for additional deterministic edge discovery. The LLM semantic preflight (Layer 2) handles all language-specific pattern recognition by default.
 - **FR-003**: System MUST discover two kinds of edges: directed dependency edges ("A must come before B") and undirected co-occurrence edges ("A and B must be in the same commit").
 - **FR-004**: System MUST contract co-occurring hunks into atomic units, each with a semantic identity (e.g. "define:Foo", "use:Foo:ModuleX").
 - **FR-005**: System MUST compute valid topological orderings of atomic units and present them to the user.
