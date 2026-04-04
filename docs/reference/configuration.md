@@ -68,6 +68,17 @@ When not set, unsquash operates in LLM-free mode:
 The LLM CLI must accept JSON on stdin and return JSON on stdout. See
 [Contracts](../architecture/contracts.md#llm-cli) for the request/response schema.
 
+### Language
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `:language` | string | (auto-detect) | Shipped profile name: `"haskell"`, `"rust"` |
+| `:language-profile` | string | (none) | Path to custom profile JSON |
+
+When neither is set, unsquash auto-detects the language from file extensions in
+the diff. See [Language Profiles](language-profiles.md) for the full schema and
+how to create custom profiles.
+
 ### Diff
 
 | Key | Type | Default | Description |

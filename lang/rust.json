@@ -1,0 +1,21 @@
+{
+  "name": "rust",
+  "file_extensions": [".rs"],
+
+  "import_pattern": "^use\\s+([\\w:]+)",
+  "export_pattern": "^pub\\s+(?:use|mod)\\s",
+  "export_name_pattern": "[A-Za-z_][A-Za-z0-9_]*",
+  "definition_pattern": "^(?:pub\\s+)?(?:fn|struct|enum|trait|type|const|static)\\s+(\\w+)",
+
+  "module_to_path": {
+    "strip_prefixes": ["src/"],
+    "separator": "/",
+    "path_separator": "::",
+    "suffix": ".rs"
+  },
+
+  "manifest_files": ["Cargo.toml"],
+  "manifest_module_pattern": "path\\s*=\\s*\"([^\"]+)\"",
+
+  "wildcard": "_"
+}

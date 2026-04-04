@@ -1,6 +1,8 @@
 (ns core.preflight
-  "Mechanical edge discovery (R1–R12) from the hunk-zoo codebook.
-   Discovers edges between hunks without LLM involvement."
+  "Mechanical edge discovery from the hunk-zoo codebook.
+   Discovers edges between hunks without LLM involvement.
+   Language-specific rules (R1, R3, R5, R13, R14) are parameterized
+   by a language profile. Universal rules (R4, R6, R8) work on any diff."
   (:require [clojure.string :as str]
             [core.graph :as g]))
 
@@ -18,49 +20,57 @@
 (defn- only-removes? [hunk]
   (every? #{:remove :context} (map :type (:lines hunk))))
 
+(defn- extract-names-from-lines
+  "Extract identifiers from lines using the given regex pattern."
+  [lines pattern]
+  (->> lines
+       (mapcat #(re-seq pattern (:content %)))
+       ;; re-seq returns strings or vectors depending on capture groups
+       (map #(if (string? %) % (first %)))
+       (set)))
+
 (defn- extract-names-from-export
   "Extract names added to an export/import list from add lines."
-  [hunk]
-  (->> (add-lines hunk)
-       (mapcat #(re-seq #"[A-Za-z_][A-Za-z0-9_']*" (:content %)))
-       (set)))
+  [hunk name-pattern]
+  (extract-names-from-lines (add-lines hunk) name-pattern))
 
 (defn- extract-names-from-removes
   "Extract names removed from lines."
-  [hunk]
-  (->> (remove-lines hunk)
-       (mapcat #(re-seq #"[A-Za-z_][A-Za-z0-9_']*" (:content %)))
-       (set)))
+  [hunk name-pattern]
+  (extract-names-from-lines (remove-lines hunk) name-pattern))
 
 (defn- hunk-defines-name?
-  "Does this hunk define a new top-level name (function/type)?"
-  [hunk name]
+  "Does this hunk define a new top-level name matching the definition pattern?"
+  [hunk name definition-re]
   (some #(and (= :add (:type %))
-              (re-find (re-pattern (str "^" (java.util.regex.Pattern/quote name) "\\s")) (:content %)))
+              (when-let [m (re-find definition-re (:content %))]
+                (let [defined (if (string? m) m (second m))]
+                  (= defined name))))
         (:lines hunk)))
 
 (defn- is-export-hunk?
-  "Does this hunk modify an export list (module ... where)?"
-  [hunk]
-  (some #(or (str/includes? (or (:content %) "") "module ")
-             (str/includes? (or (:content %) "") ") where"))
+  "Does this hunk modify an export/visibility list?"
+  [hunk export-re]
+  (some #(re-find export-re (or (:content %) ""))
         (:lines hunk)))
 
 (defn- is-import-hunk?
   "Does this hunk modify an import statement?"
-  [hunk]
-  (some #(str/includes? (or (:content %) "") "import ")
+  [hunk import-re]
+  (some #(re-find import-re (or (:content %) ""))
         (:lines hunk)))
 
 (defn- import-is-superset?
   "R3: Is the new import list a strict superset of the old?"
-  [hunk]
-  (let [old-names (extract-names-from-removes hunk)
-        new-names (extract-names-from-export hunk)]
+  [hunk name-pattern]
+  (let [old-names (extract-names-from-removes hunk name-pattern)
+        new-names (extract-names-from-export hunk name-pattern)]
     (and (seq old-names)
          (seq new-names)
          (every? new-names old-names)
          (not= old-names new-names))))
+
+;; --- Universal rules (no profile needed) ---
 
 (defn- trailing-comma-only?
   "R4: Does this hunk only add a trailing comma to an existing line?"
@@ -75,19 +85,20 @@
 
 (defn- wildcard-count-change?
   "R5: Does this hunk only change the number of wildcards in a pattern match?"
-  [hunk]
+  [hunk wildcard-char]
   (let [removes (remove-lines hunk)
-        adds (add-lines hunk)]
+        adds (add-lines hunk)
+        wc-re (re-pattern (java.util.regex.Pattern/quote wildcard-char))]
     (and (= 1 (count removes))
          (= 1 (count adds))
          (let [old (:content (first removes))
                new (:content (first adds))
-               old-wc (count (re-seq #"_" old))
-               new-wc (count (re-seq #"_" new))]
+               old-wc (count (re-seq wc-re old))
+               new-wc (count (re-seq wc-re new))]
            (and (> old-wc 2) (> new-wc 2)
                 (not= old-wc new-wc)
-                ;; Rest of the line should be the same modulo wildcards
-                (= (str/replace old #"_\s*" "") (str/replace new #"_\s*" "")))))))
+                (= (str/replace old wc-re "")
+                   (str/replace new wc-re "")))))))
 
 (defn- whitespace-only-change?
   "R8: Is this hunk a whitespace-only change?"
@@ -103,83 +114,129 @@
   "R6: Are the same imports/constraints removed across multiple files?"
   [hunks]
   (let [removal-hunks (filter only-removes? hunks)
-        ;; Group by the removed content pattern
         patterns (group-by (fn [h]
                              (set (map #(str/trim (:content %)) (remove-lines h))))
                            removal-hunks)]
-    ;; Return groups with 3+ occurrences across different files
     (->> patterns
          (filter (fn [[_ hs]]
                    (and (>= (count hs) 3)
                         (> (count (set (map :file hs))) 1))))
          (mapcat val))))
 
+;; --- Profile-aware helpers ---
+
+(defn- file-path-to-module
+  "Convert file path to module name using profile's module_to_path."
+  [profile file-path]
+  (when-let [mtp (:module_to_path profile)]
+    (let [{:keys [strip_prefixes separator path_separator suffix]} mtp
+          stripped (some (fn [prefix]
+                          (when (str/starts-with? file-path prefix)
+                            (subs file-path (count prefix))))
+                        strip_prefixes)]
+      (when stripped
+        (-> stripped
+            (str/replace (re-pattern (str (java.util.regex.Pattern/quote suffix) "$")) "")
+            (str/replace separator path_separator))))))
+
+(defn- matches-manifest?
+  "Does this file match any of the profile's manifest_files globs?"
+  [file-path manifest-globs]
+  (some (fn [glob]
+          (let [;; Simple glob: *.ext -> ends-with, exact match otherwise
+                pattern (if (str/starts-with? glob "*.")
+                          #(str/ends-with? % (subs glob 1))
+                          #(= % glob))]
+            (pattern (or file-path ""))))
+        manifest-globs))
+
 ;; --- Main preflight engine ---
 
 (defn discover-edges
   "Apply all preflight rules to a set of hunks.
+   Profile is optional — when nil, only universal rules (R4, R6, R8) fire.
    Returns a sequence of Edge maps."
-  [hunks]
+  [hunks & {:keys [profile]}]
   (let [edges (atom [])
-        hunk-by-id (into {} (map (juxt :id identity) hunks))]
+        ;; Pre-compile profile patterns
+        export-re (or (:export_pattern_re profile)
+                      (when (:export_pattern profile)
+                        (re-pattern (:export_pattern profile))))
+        name-re (when (:export_name_pattern profile)
+                  (re-pattern (:export_name_pattern profile)))
+        definition-re (or (:definition_pattern_re profile)
+                          (when (:definition_pattern profile)
+                            (re-pattern (:definition_pattern profile))))
+        import-re (or (:import_pattern_re profile)
+                      (when (:import_pattern profile)
+                        (re-pattern (:import_pattern profile))))
+        wildcard-char (:wildcard profile)
+        manifest-globs (:manifest_files profile)
+        manifest-mod-re (or (:manifest_module_pattern_re profile)
+                            (when (:manifest_module_pattern profile)
+                              (re-pattern (:manifest_module_pattern profile))))]
 
     ;; R1: Export of name defined in same diff → co-occurs
-    (doseq [h hunks
-            :when (is-export-hunk? h)]
-      (let [exported-names (extract-names-from-export h)]
-        (doseq [other hunks
-                :when (and (not= (:id h) (:id other))
-                           (= (:file h) (:file other))
-                           (some #(hunk-defines-name? other %) exported-names))]
-          (swap! edges conj
-                 (g/make-edge (:id h) (:id other) :co-occurs
-                              (str "R1: export of name defined in " (:id other))
-                              :confidence :preflight :rule "R1")))))
+    ;; Requires: export_pattern, export_name_pattern, definition_pattern
+    (when (and export-re name-re definition-re)
+      (doseq [h hunks
+              :when (is-export-hunk? h export-re)]
+        (let [exported-names (extract-names-from-export h name-re)]
+          (doseq [other hunks
+                  :when (and (not= (:id h) (:id other))
+                             (= (:file h) (:file other))
+                             (some #(hunk-defines-name? other % definition-re) exported-names))]
+            (swap! edges conj
+                   (g/make-edge (:id h) (:id other) :co-occurs
+                                (str "R1: export of name defined in " (:id other))
+                                :confidence :preflight :rule "R1"))))))
 
-    ;; R2/R3: Import additions → co-occurs with usage
-    (doseq [h hunks
-            :when (and (is-import-hunk? h) (import-is-superset? h))]
-      (let [new-names (clojure.set/difference
-                       (extract-names-from-export h)
-                       (extract-names-from-removes h))]
-        (doseq [other hunks
-                :when (and (not= (:id h) (:id other))
-                           (= (:file h) (:file other))
-                           (some (fn [name]
-                                   (some #(str/includes? (or (:content %) "") name)
-                                         (add-lines other)))
-                                 new-names))]
-          (swap! edges conj
-                 (g/make-edge (:id h) (:id other) :co-occurs
-                              (str "R3: import superset enables usage in " (:id other))
-                              :confidence :preflight :rule "R3")))))
+    ;; R3: Import additions → co-occurs with usage
+    ;; Requires: import_pattern, export_name_pattern
+    (when (and import-re name-re)
+      (doseq [h hunks
+              :when (and (is-import-hunk? h import-re) (import-is-superset? h name-re))]
+        (let [new-names (clojure.set/difference
+                         (extract-names-from-export h name-re)
+                         (extract-names-from-removes h name-re))]
+          (doseq [other hunks
+                  :when (and (not= (:id h) (:id other))
+                             (= (:file h) (:file other))
+                             (some (fn [n]
+                                     (some #(str/includes? (or (:content %) "") n)
+                                           (add-lines other)))
+                                   new-names))]
+            (swap! edges conj
+                   (g/make-edge (:id h) (:id other) :co-occurs
+                                (str "R3: import superset enables usage in " (:id other))
+                                :confidence :preflight :rule "R3"))))))
 
-    ;; R4: Trailing comma → co-occurs with adjacent addition
+    ;; R4: Trailing comma → co-occurs (universal — no profile needed)
     (doseq [h hunks
             :when (trailing-comma-only? h)]
       (let [adds (add-lines h)]
         (when (> (count adds) 1)
-          ;; The comma line and the new item are in the same hunk — mark as formatting
           (swap! edges conj
                  (g/make-edge (:id h) (:id h) :co-occurs
                               "R4: trailing comma for new item"
                               :confidence :preflight :rule "R4")))))
 
     ;; R5: Wildcard count change → co-occurs with field addition
-    (doseq [h hunks
-            :when (wildcard-count-change? h)]
-      ;; Find record field additions in other hunks
-      (doseq [other hunks
-              :when (and (not= (:id h) (:id other))
-                         (some #(and (= :add (:type %))
-                                     (re-find #"::\s*!" (:content %)))
-                               (:lines other)))]
-        (swap! edges conj
-               (g/make-edge (:id h) (:id other) :co-occurs
-                            (str "R5: wildcard count change for field in " (:id other))
-                            :confidence :preflight :rule "R5"))))
+    ;; Requires: wildcard
+    (when wildcard-char
+      (doseq [h hunks
+              :when (wildcard-count-change? h wildcard-char)]
+        (doseq [other hunks
+                :when (and (not= (:id h) (:id other))
+                           (some #(and (= :add (:type %))
+                                       (re-find #"::\s*!" (:content %)))
+                                 (:lines other)))]
+          (swap! edges conj
+                 (g/make-edge (:id h) (:id other) :co-occurs
+                              (str "R5: wildcard count change for field in " (:id other))
+                              :confidence :preflight :rule "R5")))))
 
-    ;; R6: Systematic removal across files
+    ;; R6: Systematic removal across files (universal)
     (let [systematic (systematic-removal? hunks)]
       (when (seq systematic)
         (let [ids (map :id systematic)]
@@ -189,65 +246,55 @@
                                 "R6: systematic removal across files"
                                 :confidence :preflight :rule "R6"))))))
 
-    ;; R8: Whitespace-only changes — tag but no edges
-    ;; (These hunks should be stripped, not connected)
-
     ;; R13: Cross-file import → depends on new module
-    ;; If hunk A adds "import Foo.Bar", and hunk B is a new file creating Foo/Bar.hs,
-    ;; then A depends on B (B must come first).
-    (let [new-file-hunks (filter #(zero? (or (:old-count %) 0)) hunks)
-          ;; Build map: module path -> hunk id (e.g. "Foo/Bar.hs" -> "Foo/Bar.hs:0-0")
-          new-modules (into {}
-                            (for [h new-file-hunks
-                                  :let [f (:file h)
-                                        ;; Extract module name from file path
-                                        ;; src/Foo/Bar.hs -> Foo.Bar, lib/Foo/Bar.hs -> Foo.Bar
-                                        mod-name (-> f
-                                                     (str/replace #"^(src|lib|test(/spec)?)/" "")
-                                                     (str/replace "/" ".")
-                                                     (str/replace ".hs" "")
-                                                     (str/replace ".purs" ""))]]
-                              [mod-name (:id h)]))]
-      (when (seq new-modules)
-        (doseq [h hunks
-                :when (not (zero? (or (:old-count h) 0)))]  ;; skip new files themselves
-          (doseq [line (add-lines h)
-                  :let [content (:content line)]
-                  :when (str/includes? content "import ")
-                  ;; Extract the module name from the import
-                  :let [imported (second (re-find #"import\s+(?:qualified\s+)?([A-Za-z][A-Za-z0-9.]*)" content))]
-                  :when imported
-                  :let [target-id (get new-modules imported)]
-                  :when target-id]
-            (swap! edges conj
-                   (g/make-edge (:id h) target-id :depends
-                                (str "R13: imports " imported " from new module")
-                                :confidence :preflight :rule "R13"))))))
+    ;; Requires: import_pattern, module_to_path
+    (when (and import-re (:module_to_path profile))
+      (let [new-file-hunks (filter #(zero? (or (:old-count %) 0)) hunks)
+            new-modules (into {}
+                              (for [h new-file-hunks
+                                    :let [mod-name (file-path-to-module profile (:file h))]
+                                    :when mod-name]
+                                [mod-name (:id h)]))]
+        (when (seq new-modules)
+          (doseq [h hunks
+                  :when (not (zero? (or (:old-count h) 0)))]
+            (doseq [line (add-lines h)
+                    :let [content (:content line)]
+                    :let [m (re-find import-re content)]
+                    :when m
+                    :let [imported (if (string? m) m (second m))]
+                    :when imported
+                    :let [target-id (get new-modules imported)]
+                    :when target-id]
+              (swap! edges conj
+                     (g/make-edge (:id h) target-id :depends
+                                  (str "R13: imports " imported " from new module")
+                                  :confidence :preflight :rule "R13")))))))
 
-    ;; R14: Cabal exposed-modules/other-modules → depends on new module
-    ;; If a cabal hunk adds "Foo.Bar" to exposed-modules, and there's a new Foo/Bar.hs,
-    ;; they co-occur (both needed for the module to be visible).
-    (let [new-file-hunks (filter #(zero? (or (:old-count %) 0)) hunks)
-          new-modules (into {}
-                            (for [h new-file-hunks
-                                  :let [f (:file h)
-                                        mod-name (-> f
-                                                     (str/replace #"^(src|lib|test(/spec)?)/" "")
-                                                     (str/replace "/" ".")
-                                                     (str/replace ".hs" "")
-                                                     (str/replace ".purs" ""))]]
-                              [mod-name (:id h)]))]
-      (when (seq new-modules)
-        (doseq [h hunks
-                :when (str/ends-with? (or (:file h) "") ".cabal")]
-          (doseq [line (add-lines h)
-                  :let [content (str/trim (:content line))]
-                  :let [target-id (get new-modules content)]
-                  :when target-id]
-            (swap! edges conj
-                   (g/make-edge (:id h) target-id :co-occurs
-                                (str "R14: cabal registers module " content)
-                                :confidence :preflight :rule "R14"))))))
+    ;; R14: Manifest module registration → co-occurs with new module file
+    ;; Requires: manifest_files, manifest_module_pattern, module_to_path
+    (when (and manifest-globs manifest-mod-re (:module_to_path profile))
+      (let [new-file-hunks (filter #(zero? (or (:old-count %) 0)) hunks)
+            new-modules (into {}
+                              (for [h new-file-hunks
+                                    :let [mod-name (file-path-to-module profile (:file h))]
+                                    :when mod-name]
+                                [mod-name (:id h)]))]
+        (when (seq new-modules)
+          (doseq [h hunks
+                  :when (matches-manifest? (:file h) manifest-globs)]
+            (doseq [line (add-lines h)
+                    :let [content (str/trim (:content line))]
+                    :let [m (re-find manifest-mod-re content)]
+                    :when m
+                    :let [mod-name (if (string? m) m (second m))]
+                    :when mod-name
+                    :let [target-id (get new-modules (str/trim mod-name))]
+                    :when target-id]
+              (swap! edges conj
+                     (g/make-edge (:id h) target-id :co-occurs
+                                  (str "R14: manifest registers module " mod-name)
+                                  :confidence :preflight :rule "R14")))))))
 
     @edges))
 

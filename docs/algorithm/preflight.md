@@ -17,16 +17,21 @@ graph TD
     EDGES --> DEP[":depends"]
 ```
 
-| Rule | Name | Edge type | Confidence |
-|------|------|-----------|------------|
-| R1 | Export co-occurs with definition | `:co-occurs` | `:preflight` |
-| R3 | Import superset | `:co-occurs` | `:preflight` |
-| R4 | Trailing comma | `:co-occurs` | `:preflight` |
-| R5 | Wildcard count change | `:co-occurs` | `:preflight` |
-| R6 | Systematic removal | `:co-occurs` | `:preflight` |
-| R8 | Whitespace-only | (strip) | `:preflight` |
-| R13 | Cross-file import | `:depends` | `:preflight` |
-| R14 | Cabal module registration | `:co-occurs` | `:preflight` |
+!!! info "Universal vs. profile-driven rules"
+    Rules marked **profile** require a [language profile](../reference/language-profiles.md)
+    to fire. Without a profile, only **universal** rules run. Profiles are auto-detected
+    from file extensions or set via `:language` in `unsquash.edn`.
+
+| Rule | Name | Edge type | Requires |
+|------|------|-----------|----------|
+| R1 | Export co-occurs with definition | `:co-occurs` | profile |
+| R3 | Import superset | `:co-occurs` | profile |
+| R4 | Trailing comma | `:co-occurs` | universal |
+| R5 | Wildcard count change | `:co-occurs` | profile |
+| R6 | Systematic removal | `:co-occurs` | universal |
+| R8 | Whitespace-only | (strip) | universal |
+| R13 | Cross-file import | `:depends` | profile |
+| R14 | Manifest module registration | `:co-occurs` | profile |
 
 ## Rule details
 
