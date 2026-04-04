@@ -26,14 +26,11 @@
   (and (zero? (:new-count hunk))
        (every? #(= :remove (:type %)) (filter #(not= :context (:type %)) (:lines hunk)))))
 
-(defn- apply-hunk-lines
-  "Generate a patch string from a hunk that can be applied with git apply."
+(defn- hunk-body
+  "Generate the @@ section for a single hunk (no --- +++ header)."
   [hunk]
-  (let [{:keys [file old-start old-count new-start new-count lines]} hunk
-        from-path (if (new-file? hunk) "/dev/null" (str "a/" file))
-        to-path (if (deleted-file? hunk) "/dev/null" (str "b/" file))
-        header (str "--- " from-path "\n+++ " to-path "\n"
-                    "@@ -" old-start "," old-count " +" new-start "," new-count " @@\n")
+  (let [{:keys [old-start old-count new-start new-count lines]} hunk
+        header (str "@@ -" old-start "," old-count " +" new-start "," new-count " @@\n")
         body (str/join "\n"
                        (map (fn [line]
                               (case (:type line)
@@ -42,6 +39,14 @@
                                 :context (str " " (:content line))))
                             lines))]
     (str header body "\n")))
+
+(defn- apply-hunk-lines
+  "Generate a full patch string from a single hunk (with --- +++ header)."
+  [hunk]
+  (let [{:keys [file]} hunk
+        from-path (if (new-file? hunk) "/dev/null" (str "a/" file))
+        to-path (if (deleted-file? hunk) "/dev/null" (str "b/" file))]
+    (str "--- " from-path "\n+++ " to-path "\n" (hunk-body hunk))))
 
 (defn- make-new-file-patch
   "Generate a patch for a completely new file by combining all sub-hunks."
@@ -66,13 +71,15 @@
     (str/join "\n"
               (for [[file hunks] hunks-by-file]
                 (let [is-new (every? new-file? hunks)
-                      is-del (every? deleted-file? hunks)]
+                      is-del (every? deleted-file? hunks)
+                      sorted (sort-by :old-start hunks)]
                   (if is-new
                     (make-new-file-patch file hunks)
                     (str "diff --git a/" file " b/" file "\n"
                          (when is-del "deleted file mode 100644\n")
-                         (str/join "" (map apply-hunk-lines
-                                          (sort-by :old-start hunks))))))))))
+                         "--- " (if is-del "/dev/null" (str "a/" file)) "\n"
+                         "+++ " (if is-del "/dev/null" (str "b/" file)) "\n"
+                         (str/join "" (map hunk-body sorted)))))))))
 
 (defn apply-atomic-unit
   "Apply an atomic unit as a git commit.
@@ -103,14 +110,123 @@
          :compiles (:success oracle-result)
          :error (when-not (:success oracle-result) (:stderr oracle-result))})
       (catch Exception e
+        ;; Clean up any partial apply (unstaged new files, etc.)
+        (try (git dir "checkout" "--" ".") (catch Exception _ nil))
+        (try (git dir "clean" "-fd") (catch Exception _ nil))
         {:sha nil
          :message message
          :compiles false
          :error (str "Failed to apply: " (.getMessage e))}))))
 
+(defn- merge-units
+  "Merge two atomic units into one, combining their hunks."
+  [unit-a unit-b]
+  (let [merged-hunks (clojure.set/union (:hunks unit-a) (:hunks unit-b))
+        merged-id (str (:id unit-a) "+" (:id unit-b))
+        merged-identity (str (:identity unit-a) "+" (:identity unit-b))]
+    (assoc unit-a
+           :id merged-id
+           :identity merged-identity
+           :hunks merged-hunks)))
+
+(defn- find-merge-candidate
+  "Find the best unit to merge with the failed unit.
+   Prefers units that share files, then the next unit in the remaining ordering."
+  [failed-unit remaining-ids graph]
+  (let [failed-files (set (map :file (:hunks failed-unit)))]
+    ;; First: find a remaining unit that touches the same files
+    (or (first (filter (fn [uid]
+                         (let [u (get-in graph [:nodes uid])
+                               u-files (set (map :file (:hunks u)))]
+                           (seq (clojure.set/intersection failed-files u-files))))
+                       remaining-ids))
+        ;; Fallback: just take the next one
+        (first remaining-ids))))
+
+;; --- Retry strategies ---
+
+(defn- apply-merge-strategy
+  "Dumb fallback: merge the failed unit with a same-file neighbor."
+  [failed-unit failed-result remaining-ids graph]
+  (let [candidate-id (find-merge-candidate failed-unit remaining-ids graph)]
+    (when candidate-id
+      (let [candidate (get-in graph [:nodes candidate-id])]
+        {:action :merge
+         :merge-with candidate-id
+         :reason (str "Merging with " candidate-id " (shares files)")}))))
+
+(defn- handle-merge
+  "Execute a merge decision: combine two units, update graph, return new state."
+  [unit unit-id candidate-id rest-ids graph]
+  (let [candidate (get-in graph [:nodes candidate-id])
+        merged (merge-units unit candidate)
+        new-nodes (-> (:nodes graph)
+                      (dissoc unit-id candidate-id)
+                      (assoc (:id merged) merged))
+        remap (fn [e]
+                (cond-> e
+                  (#{unit-id candidate-id} (:from e)) (assoc :from (:id merged))
+                  (#{unit-id candidate-id} (:to e)) (assoc :to (:id merged))))
+        new-edges (->> (:edges graph)
+                       (map remap)
+                       (remove #(= (:from %) (:to %)))
+                       set)
+        new-graph {:nodes new-nodes :edges new-edges}
+        new-remaining (into [(:id merged)] (remove #{candidate-id} rest-ids))]
+    {:remaining new-remaining :graph new-graph}))
+
 (defn apply-ordering
-  "Apply a full ordering of atomic units as sequential commits.
-   Returns {:commits [...] :final-state-matches bool}."
+  "Apply atomic units as commits. On failure, calls retry-fn for diagnosis.
+   retry-fn receives context and returns {:action :merge/:skip, ...} or nil.
+   Default retry-fn merges with a same-file neighbor."
+  [ordering graph oracle-fn dir original-tree-sha
+   & {:keys [max-retries retry-fn] :or {max-retries 3}}]
+  (let [total-retries (atom 0)
+        retry-fn (or retry-fn
+                     (fn [{:keys [failed-unit failed-result remaining-ids graph]}]
+                       (apply-merge-strategy failed-unit failed-result remaining-ids graph)))]
+    (loop [remaining (vec ordering)
+           graph graph
+           commits []]
+      (if (empty? remaining)
+        ;; Done
+        (let [final-tree (try (git dir "rev-parse" "HEAD^{tree}") (catch Exception _ nil))]
+          {:commits commits
+           :final-state-matches (= final-tree original-tree-sha)
+           :retries @total-retries})
+        ;; Try next unit
+        (let [unit-id (first remaining)
+              unit (get-in graph [:nodes unit-id])
+              result (apply-atomic-unit unit oracle-fn dir)
+              rest-ids (vec (rest remaining))]
+          (if (:compiles result)
+            (recur rest-ids graph (conj commits result))
+            ;; Failed — roll back and clean up (including untracked new files)
+            (do
+              (when (:sha result)
+                (try (git dir "reset" "--hard" "HEAD~1") (catch Exception _ nil)))
+              (try (git dir "clean" "-fd") (catch Exception _ nil))
+              (let [decision (when (and (< @total-retries max-retries) (seq rest-ids))
+                               (retry-fn {:failed-unit unit
+                                          :failed-result result
+                                          :remaining-ids rest-ids
+                                          :graph graph
+                                          :commits-so-far commits}))]
+                (cond
+                  (= :merge (:action decision))
+                  (do (swap! total-retries inc)
+                      (let [new-state (handle-merge unit unit-id (:merge-with decision) rest-ids graph)]
+                        (recur (:remaining new-state) (:graph new-state) commits)))
+
+                  (= :skip (:action decision))
+                  (do (swap! total-retries inc)
+                      (recur rest-ids graph (conj commits (assoc result :skipped true))))
+
+                  :else
+                  (recur rest-ids graph (conj commits result)))))))))))
+
+(defn apply-ordering-simple
+  "Original apply-ordering without retry logic."
   [ordering graph oracle-fn dir original-tree-sha]
   (let [commits (reduce
                  (fn [acc unit-id]
@@ -119,7 +235,6 @@
                      (conj acc result)))
                  []
                  ordering)
-        ;; Check final state matches original
         final-tree (try (git dir "rev-parse" "HEAD^{tree}") (catch Exception _ nil))
         matches (= final-tree original-tree-sha)]
     {:commits commits
