@@ -15,6 +15,5 @@
   },
 
   "manifest_files": ["*.csproj", "*.sln"],
-  "manifest_module_pattern": "<RootNamespace>([^<]+)</RootNamespace>",
-  "manifest_first": true
+  "manifest_module_pattern": "<RootNamespace>([^<]+)</RootNamespace>"
 }
