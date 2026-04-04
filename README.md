@@ -28,34 +28,64 @@ The compile oracle validates every step. The user picks the commit narrative fro
 ## Development
 
 ```bash
-nix develop          # enter dev shell (babashka, git, just, stgit)
-just ci              # run full CI pipeline
-just test            # run tests
+nix develop                    # enter dev shell (babashka, git, just, stgit)
+just ci                        # run full CI pipeline
+just test                      # run tests
 cp unsquash.example.edn unsquash.edn  # configure oracle + LLM
 ```
 
 ## Usage
 
+### CLI
+
 ```bash
-# Analyze a single commit
+# Analyze a single commit — build dependency graph
 bb analyze --ref HEAD --oracle "cabal build all -O0" --llm "llm chat -m claude-sonnet"
 
-# Propose orderings
+# Analyze with patience diff algorithm for better hunk boundaries
+bb analyze --ref HEAD --diff-algorithm patience
+
+# Propose orderings — show valid topological sorts with narratives
 bb propose --max 3
 
-# Apply chosen ordering
+# Apply chosen ordering — create commits validated by oracle
 bb apply --ordering 0
 
 # Consolidate messy commit range (full two-phase)
 bb consolidate --ref main..feature --llm "llm chat -m claude-sonnet"
-
-# Start MCP server (for Claude Code integration)
-bb mcp
 ```
 
-## Status
+### MCP server (Claude Code integration)
 
-Implementation in progress. See [issue tracker](https://github.com/lambdasistemi/unsquash/issues) for progress.
+Add to your MCP config:
+
+```json
+{
+  "mcpServers": {
+    "unsquash": {
+      "command": "nix",
+      "args": ["develop", "--quiet", "--command", "bb", "mcp"],
+      "cwd": "/path/to/unsquash"
+    }
+  }
+}
+```
+
+Available tools: `unsquash-analyze`, `unsquash-propose`, `unsquash-apply`, `unsquash-consolidate`.
+
+## Configuration
+
+Copy `unsquash.example.edn` to `unsquash.edn`:
+
+```edn
+{:oracle {:command "cabal build all -O0"    ;; compile oracle command
+          :timeout 120}                      ;; timeout in seconds
+ :llm {:command "llm chat -m claude-sonnet"} ;; LLM CLI command
+ :diff {:algorithm "patience"                ;; patience | histogram | myers
+        :split-at-blank-lines true}          ;; split hunks at blank lines
+ :max-rounds 4                               ;; LLM refinement rounds
+ :max-orderings 3}                           ;; topological sorts to compute
+```
 
 ## Documentation
 
