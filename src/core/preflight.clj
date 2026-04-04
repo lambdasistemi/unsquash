@@ -126,18 +126,11 @@
 ;; --- Profile-aware helpers ---
 
 (defn- file-path-to-module
-  "Convert file path to module name using profile's module_to_path."
+  "Convert file path to module name using profile's module_to_path.
+   Delegates to core.profile/file-path-to-module."
   [profile file-path]
-  (when-let [mtp (:module_to_path profile)]
-    (let [{:keys [strip_prefixes separator path_separator suffix]} mtp
-          stripped (some (fn [prefix]
-                          (when (str/starts-with? file-path prefix)
-                            (subs file-path (count prefix))))
-                        strip_prefixes)]
-      (when stripped
-        (-> stripped
-            (str/replace (re-pattern (str (java.util.regex.Pattern/quote suffix) "$")) "")
-            (str/replace separator path_separator))))))
+  (require 'core.profile)
+  ((resolve 'core.profile/file-path-to-module) profile file-path))
 
 (defn- matches-manifest?
   "Does this file match any of the profile's manifest_files globs?"
