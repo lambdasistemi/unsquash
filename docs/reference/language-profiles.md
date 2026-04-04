@@ -17,16 +17,16 @@ When no profile is active, only universal rules fire.
 
 ## Shipped profiles
 
-| Profile | File | Extensions | Rules |
-|---------|------|-----------|-------|
-| Haskell | `lang/haskell.json` | `.hs`, `.lhs` | R1, R3, R5, R13, R14 |
-| Rust | `lang/rust.json` | `.rs` | R1, R3, R5, R13, R14 |
-| Python | `lang/python.json` | `.py` | R1, R3, R13, R14 |
-| TypeScript | `lang/typescript.json` | `.ts`, `.tsx` | R1, R3, R13, R14 |
-| Go | `lang/go.json` | `.go` | R1, R3, R13, R14 |
-| Java | `lang/java.json` | `.java` | R1, R3, R13, R14 |
-| C# | `lang/csharp.json` | `.cs` | R1, R3, R13, R14 |
-| Ruby | `lang/ruby.json` | `.rb` | R1, R3, R13, R14 |
+| Profile | File | Extensions | Rules | Manifest first |
+|---------|------|-----------|-------|:--------------:|
+| Haskell | `lang/haskell.json` | `.hs`, `.lhs` | R1, R3, R5, R13, R14, R15 | yes |
+| Rust | `lang/rust.json` | `.rs` | R1, R3, R5, R13, R14, R15 | yes |
+| Go | `lang/go.json` | `.go` | R1, R3, R13, R14, R15 | yes |
+| Java | `lang/java.json` | `.java` | R1, R3, R13, R14, R15 | yes |
+| C# | `lang/csharp.json` | `.cs` | R1, R3, R13, R14, R15 | yes |
+| Python | `lang/python.json` | `.py` | R1, R3, R13, R14 | no |
+| TypeScript | `lang/typescript.json` | `.ts`, `.tsx` | R1, R3, R13, R14 | no |
+| Ruby | `lang/ruby.json` | `.rb` | R1, R3, R13, R14 | no |
 
 ## Configuration
 
@@ -98,6 +98,13 @@ means that rule is silently skipped.
 | `manifest_files` | `[string]` | R14 | Glob patterns for package manifests |
 | `manifest_module_pattern` | regex | R14 | Extracts module names from manifest files |
 | `wildcard` | string | R5 | Wildcard character in pattern matches |
+| `manifest_first` | boolean | R15 | All manifest changes become the first commit |
+
+!!! tip "`manifest_first`"
+    When enabled, all manifest hunks co-occur into one atomic unit and every
+    source hunk depends on it. The result: one "dependency changes" commit,
+    always first in any valid ordering. Enabled by default for Haskell, Rust,
+    Go, Java, and C#.
 
 ### Module-to-path transform
 

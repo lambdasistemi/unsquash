@@ -15,5 +15,6 @@
   },
 
   "manifest_files": ["pom.xml", "build.gradle", "build.gradle.kts"],
-  "manifest_module_pattern": "<artifactId>([^<]+)</artifactId>"
+  "manifest_module_pattern": "<artifactId>([^<]+)</artifactId>",
+  "manifest_first": true
 }

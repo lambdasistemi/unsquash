@@ -191,6 +191,60 @@
       (is (some? profile))
       (is (= "rust" (:name profile))))))
 
+;; --- R15: manifest changes always in first commit ---
+
+(deftest r15-cabal-before-source
+  (testing "R15: all cabal hunks co-occur and come before source hunks"
+    (let [h-cabal1 {:id "mylib.cabal:5-8" :file "mylib.cabal" :old-count 3
+                    :lines [{:type :add :content "    , containers >= 0.6"}]}
+          h-cabal2 {:id "mylib.cabal:15-18" :file "mylib.cabal" :old-count 3
+                    :lines [{:type :add :content "    , text >= 2.0"}]}
+          h-src1 {:id "src/Foo.hs:10-15" :file "src/Foo.hs" :old-count 5
+                  :lines [{:type :add :content "import Data.Map"}]}
+          h-src2 {:id "src/Bar.hs:3-7" :file "src/Bar.hs" :old-count 5
+                  :lines [{:type :add :content "import Data.Text"}]}
+          edges (pf/discover-edges [h-cabal1 h-cabal2 h-src1 h-src2] :profile haskell-profile)
+          r15-edges (filter #(= "R15" (:rule %)) edges)
+          co-edges (filter #(= :co-occurs (:kind %)) r15-edges)
+          dep-edges (filter #(= :depends (:kind %)) r15-edges)]
+      (is (= 1 (count co-edges)) "Two cabal hunks should co-occur")
+      (is (= 2 (count dep-edges)) "Each source hunk depends on manifest")
+      (is (every? #(= "mylib.cabal:5-8" (:to %)) dep-edges)
+          "All deps point to the representative manifest hunk"))))
+
+(deftest r15-cargo-before-source
+  (testing "R15: Cargo.toml comes before .rs source"
+    (let [h-cargo {:id "Cargo.toml:10-12" :file "Cargo.toml" :old-count 3
+                   :lines [{:type :add :content "serde = \"1.0\""}]}
+          h-src {:id "src/main.rs:5-8" :file "src/main.rs" :old-count 5
+                 :lines [{:type :add :content "use serde::Serialize;"}]}
+          edges (pf/discover-edges [h-cargo h-src] :profile rust-profile)
+          r15-edges (filter #(= "R15" (:rule %)) edges)]
+      (is (= 1 (count r15-edges)))
+      (is (= "src/main.rs:5-8" (:from (first r15-edges))))
+      (is (= "Cargo.toml:10-12" (:to (first r15-edges)))))))
+
+(deftest r15-removal-also-first
+  (testing "R15: manifest removal hunks also go in the first commit"
+    (let [h-cabal {:id "mylib.cabal:5-8" :file "mylib.cabal" :old-count 3
+                   :lines [{:type :remove :content "    , old-dep >= 0.1"}]}
+          h-src {:id "src/Foo.hs:10-15" :file "src/Foo.hs" :old-count 5
+                 :lines [{:type :remove :content "import OldDep"}]}
+          edges (pf/discover-edges [h-cabal h-src] :profile haskell-profile)
+          r15-edges (filter #(= "R15" (:rule %)) edges)]
+      (is (= 1 (count r15-edges)) "Even removal-only manifest goes first"))))
+
+(deftest r15-disabled-without-flag
+  (testing "R15: no manifest-first edges when profile lacks manifest_first"
+    (let [py-profile (prof/validate-profile (prof/load-profile "lang/python.json"))
+          h-manifest {:id "pyproject.toml:5-8" :file "pyproject.toml" :old-count 3
+                      :lines [{:type :add :content "requests = \"^2.0\""}]}
+          h-src {:id "src/main.py:5-8" :file "src/main.py" :old-count 5
+                 :lines [{:type :add :content "import requests"}]}
+          edges (pf/discover-edges [h-manifest h-src] :profile py-profile)
+          r15-edges (filter #(= "R15" (:rule %)) edges)]
+      (is (empty? r15-edges) "Python profile has no manifest_first — no R15"))))
+
 ;; --- Multi-language profile tests ---
 
 (defn- r13-test
