@@ -1,0 +1,18 @@
+--- a/src/Module1.hs
++++ b/src/Module1.hs
+@@ -1,5 +1,4 @@
+ import Data.Map (Map)
+-import NoThunks.Class (NoThunks)
+ import Data.Set (Set)
+--- a/src/Module2.hs
++++ b/src/Module2.hs
+@@ -1,5 +1,4 @@
+ import Data.Text (Text)
+-import NoThunks.Class (NoThunks)
+ import Data.ByteString (ByteString)
+--- a/src/Module3.hs
++++ b/src/Module3.hs
+@@ -1,5 +1,4 @@
+ import Data.Word (Word64)
+-import NoThunks.Class (NoThunks)
+ import Data.Int (Int64)

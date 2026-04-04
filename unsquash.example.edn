@@ -1,0 +1,21 @@
+;; unsquash configuration
+;; Copy to unsquash.edn and adjust for your project.
+
+{;; Compile oracle — command that validates the working tree compiles.
+ ;; Exit code 0 = success. Stderr captured for LLM feedback.
+ :oracle {:command "cabal build all -O0"
+          :timeout 120}
+
+ ;; LLM CLI — command that accepts JSON on stdin, returns JSON on stdout.
+ ;; Any LLM CLI works: llm, claude, curl wrapper, local model.
+ :llm {:command "llm chat -m claude-sonnet"}
+
+ ;; Diff settings
+ :diff {:algorithm "patience"       ;; patience | histogram | myers
+        :split-at-blank-lines true} ;; split hunks at blank lines before classification
+
+ ;; Maximum LLM refinement rounds before stopping
+ :max-rounds 4
+
+ ;; Maximum topological orderings to compute
+ :max-orderings 3}
