@@ -16,23 +16,20 @@
   [{:keys [command request timeout]
     :or {timeout 60000}}]
   (let [input-json (json/generate-string request)
-        proc (p/process {:cmd ["sh" "-c" command]
-                         :in input-json
-                         :out :string
-                         :err :string})
-        _ (deref proc timeout nil)
-        exit (:exit @proc)]
-    (if (zero? exit)
-      (let [output (slurp (:out proc))]
-        (try
-          (json/parse-string output true)
-          (catch Exception e
-            (throw (ex-info "Failed to parse LLM response as JSON"
-                            {:output output
-                             :error (.getMessage e)})))))
+        result @(p/process {:cmd ["sh" "-c" command]
+                            :in input-json
+                            :out :string
+                            :err :string})]
+    (if (zero? (:exit result))
+      (try
+        (json/parse-string (:out result) true)
+        (catch Exception e
+          (throw (ex-info "Failed to parse LLM response as JSON"
+                          {:output (:out result)
+                           :error (.getMessage e)}))))
       (throw (ex-info "LLM CLI failed"
-                      {:exit exit
-                       :stderr (slurp (:err proc))})))))
+                      {:exit (:exit result)
+                       :stderr (:err result)})))))
 
 (defn llm-from-config
   "Create an LLM function from a config map.
