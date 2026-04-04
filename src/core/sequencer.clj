@@ -10,20 +10,29 @@
   (let [proc (p/process {:cmd (into ["git"] args)
                          :dir dir
                          :out :string
-                         :err :string})]
-    (deref proc 30000 nil)
-    (let [exit (:exit @proc)]
-      (if (zero? exit)
-        (str/trim (slurp (:out proc)))
-        (throw (ex-info (str "git failed: " (str/join " " args))
-                        {:exit exit
-                         :stderr (slurp (:err proc))}))))))
+                         :err :string})
+        result @proc]
+    (if (zero? (:exit result))
+      (str/trim (:out result))
+      (throw (ex-info (str "git failed: " (str/join " " args))
+                      {:exit (:exit result)
+                       :stderr (:err result)})))))
+
+(defn- new-file? [hunk]
+  (and (zero? (:old-count hunk))
+       (every? #(= :add (:type %)) (filter #(not= :context (:type %)) (:lines hunk)))))
+
+(defn- deleted-file? [hunk]
+  (and (zero? (:new-count hunk))
+       (every? #(= :remove (:type %)) (filter #(not= :context (:type %)) (:lines hunk)))))
 
 (defn- apply-hunk-lines
   "Generate a patch string from a hunk that can be applied with git apply."
   [hunk]
   (let [{:keys [file old-start old-count new-start new-count lines]} hunk
-        header (str "--- a/" file "\n+++ b/" file "\n"
+        from-path (if (new-file? hunk) "/dev/null" (str "a/" file))
+        to-path (if (deleted-file? hunk) "/dev/null" (str "b/" file))
+        header (str "--- " from-path "\n+++ " to-path "\n"
                     "@@ -" old-start "," old-count " +" new-start "," new-count " @@\n")
         body (str/join "\n"
                        (map (fn [line]
