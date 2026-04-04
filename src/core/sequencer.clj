@@ -81,12 +81,38 @@
                          "+++ " (if is-del "/dev/null" (str "b/" file)) "\n"
                          (str/join "" (map hunk-body sorted)))))))))
 
+(defn- make-single-hunk-patch
+  "Generate a standalone patch for a single hunk."
+  [hunk]
+  (let [{:keys [file]} hunk
+        is-new (new-file? hunk)
+        is-del (deleted-file? hunk)]
+    (if is-new
+      (make-new-file-patch file [hunk])
+      (str "diff --git a/" file " b/" file "\n"
+           (when is-del "deleted file mode 100644\n")
+           "--- " (if is-del "/dev/null" (str "a/" file)) "\n"
+           "+++ " (if is-del "/dev/null" (str "b/" file)) "\n"
+           (hunk-body hunk)))))
+
+(defn- apply-hunks-sequentially
+  "Apply hunks one at a time. Each hunk gets its own git apply.
+   This handles merged units where hunks from the same file may overlap."
+  [hunks dir]
+  (let [patch-file (str dir "/.unsquash-patch.tmp")
+        ;; Sort: new files first (they create the file), then by file+line
+        sorted (sort-by (fn [h] [(if (new-file? h) 0 1) (:file h) (:old-start h)]) hunks)]
+    (doseq [hunk sorted]
+      (let [patch (make-single-hunk-patch hunk)]
+        (spit patch-file patch)
+        (git dir "apply" "--allow-empty" patch-file)))
+    (clojure.java.io/delete-file patch-file true)))
+
 (defn apply-atomic-unit
   "Apply an atomic unit as a git commit.
    Returns {:sha str :message str :compiles bool :error str}."
   [unit oracle-fn dir]
-  (let [patch (make-patch unit)
-        message (str (cond
+  (let [message (str (cond
                        (str/starts-with? (:identity unit) "define:") "feat: "
                        (str/starts-with? (:identity unit) "use:") "refactor: "
                        (str/starts-with? (:identity unit) "removal:") "refactor: "
@@ -94,11 +120,8 @@
                        :else "chore: ")
                      (:identity unit))]
     (try
-      ;; Write patch to temp file and apply
-      (let [patch-file (str dir "/.unsquash-patch.tmp")]
-        (spit patch-file patch)
-        (git dir "apply" "--allow-empty" patch-file)
-        (clojure.java.io/delete-file patch-file true))
+      ;; Apply hunks one at a time
+      (apply-hunks-sequentially (vec (:hunks unit)) dir)
       ;; Stage and commit
       (git dir "add" "-A")
       (git dir "commit" "-m" message "--allow-empty")

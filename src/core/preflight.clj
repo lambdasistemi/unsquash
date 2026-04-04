@@ -192,6 +192,63 @@
     ;; R8: Whitespace-only changes — tag but no edges
     ;; (These hunks should be stripped, not connected)
 
+    ;; R13: Cross-file import → depends on new module
+    ;; If hunk A adds "import Foo.Bar", and hunk B is a new file creating Foo/Bar.hs,
+    ;; then A depends on B (B must come first).
+    (let [new-file-hunks (filter #(zero? (or (:old-count %) 0)) hunks)
+          ;; Build map: module path -> hunk id (e.g. "Foo/Bar.hs" -> "Foo/Bar.hs:0-0")
+          new-modules (into {}
+                            (for [h new-file-hunks
+                                  :let [f (:file h)
+                                        ;; Extract module name from file path
+                                        ;; src/Foo/Bar.hs -> Foo.Bar, lib/Foo/Bar.hs -> Foo.Bar
+                                        mod-name (-> f
+                                                     (str/replace #"^(src|lib|test(/spec)?)/" "")
+                                                     (str/replace "/" ".")
+                                                     (str/replace ".hs" "")
+                                                     (str/replace ".purs" ""))]]
+                              [mod-name (:id h)]))]
+      (when (seq new-modules)
+        (doseq [h hunks
+                :when (not (zero? (or (:old-count h) 0)))]  ;; skip new files themselves
+          (doseq [line (add-lines h)
+                  :let [content (:content line)]
+                  :when (str/includes? content "import ")
+                  ;; Extract the module name from the import
+                  :let [imported (second (re-find #"import\s+(?:qualified\s+)?([A-Za-z][A-Za-z0-9.]*)" content))]
+                  :when imported
+                  :let [target-id (get new-modules imported)]
+                  :when target-id]
+            (swap! edges conj
+                   (g/make-edge (:id h) target-id :depends
+                                (str "R13: imports " imported " from new module")
+                                :confidence :preflight :rule "R13"))))))
+
+    ;; R14: Cabal exposed-modules/other-modules → depends on new module
+    ;; If a cabal hunk adds "Foo.Bar" to exposed-modules, and there's a new Foo/Bar.hs,
+    ;; they co-occur (both needed for the module to be visible).
+    (let [new-file-hunks (filter #(zero? (or (:old-count %) 0)) hunks)
+          new-modules (into {}
+                            (for [h new-file-hunks
+                                  :let [f (:file h)
+                                        mod-name (-> f
+                                                     (str/replace #"^(src|lib|test(/spec)?)/" "")
+                                                     (str/replace "/" ".")
+                                                     (str/replace ".hs" "")
+                                                     (str/replace ".purs" ""))]]
+                              [mod-name (:id h)]))]
+      (when (seq new-modules)
+        (doseq [h hunks
+                :when (str/ends-with? (or (:file h) "") ".cabal")]
+          (doseq [line (add-lines h)
+                  :let [content (str/trim (:content line))]
+                  :let [target-id (get new-modules content)]
+                  :when target-id]
+            (swap! edges conj
+                   (g/make-edge (:id h) target-id :co-occurs
+                                (str "R14: cabal registers module " content)
+                                :confidence :preflight :rule "R14"))))))
+
     @edges))
 
 (defn whitespace-only-hunks
