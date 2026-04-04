@@ -219,15 +219,15 @@
       (is (= "src/main.rs:5-8" (:from (first r15-edges))))
       (is (= "Cargo.toml:10-12" (:to (first r15-edges)))))))
 
-(deftest r15-no-edge-without-additions
-  (testing "R15: manifest hunk with only removals doesn't create R15 edges"
+(deftest r15-all-manifest-changes-first
+  (testing "R15: even removal-only manifest hunks go in the first commit"
     (let [h-cabal {:id "mylib.cabal:5-8" :file "mylib.cabal" :old-count 3
                    :lines [{:type :remove :content "    , old-dep >= 0.1"}]}
           h-src {:id "src/Foo.hs:10-15" :file "src/Foo.hs" :old-count 5
                  :lines [{:type :remove :content "import OldDep"}]}
           edges (pf/discover-edges [h-cabal h-src] :profile haskell-profile)
           r15-edges (filter #(= "R15" (:rule %)) edges)]
-      (is (empty? r15-edges) "No R15 edges for removal-only manifest hunks"))))
+      (is (= 1 (count r15-edges)) "Source hunk depends on manifest hunk"))))
 
 ;; --- Multi-language profile tests ---
 
