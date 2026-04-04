@@ -1,0 +1,58 @@
+site_name: unsquash
+site_url: https://lambdasistemi.github.io/unsquash/
+repo_url: https://github.com/lambdasistemi/unsquash
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+  features:
+    - navigation.indexes
+    - navigation.sections
+    - navigation.path
+    - toc.integrate
+    - content.code.copy
+
+plugins:
+  - search
+  - mermaid2
+
+markdown_extensions:
+  - admonition
+  - tables
+  - footnotes
+  - def_list
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/gh/paolino/dev-assets@main/mkdocs/docs/js/read-aloud.js
+
+nav:
+  - Home: index.md
+  - Algorithm:
+    - Overview: algorithm/overview.md
+    - "Phase 1: Consolidation": algorithm/consolidation.md
+    - "Phase 2: Unfold":
+      - Diff Parsing: algorithm/parsing.md
+      - Preflight Rules: algorithm/preflight.md
+      - Dependency Graph: algorithm/graph.md
+      - Sequencer: algorithm/sequencer.md
+      - Commit Messages: algorithm/messages.md
+  - Architecture:
+    - Data Model: architecture/data-model.md
+    - Contracts: architecture/contracts.md
+  - Reference:
+    - Hunk Zoo: reference/hunk-zoo.md
+    - Configuration: reference/configuration.md
