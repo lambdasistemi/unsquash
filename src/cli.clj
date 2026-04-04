@@ -6,6 +6,7 @@
             [core.diff-parser :as dp]
             [core.hunk-splitter :as hs]
             [core.preflight :as pf]
+            [core.profile :as prof]
             [core.graph :as g]
             [core.sequencer :as seq]
             [llm.classifier :as llm]
@@ -63,8 +64,10 @@
                                split-diffs))
         ;; Strip whitespace-only hunks (R8)
         clean-hunks (vec (pf/non-whitespace-hunks all-hunks))
+        ;; Resolve language profile
+        profile (prof/resolve-profile config clean-hunks)
         ;; Preflight edge discovery
-        preflight-edges (pf/discover-edges clean-hunks)
+        preflight-edges (pf/discover-edges clean-hunks :profile profile)
         ;; Create initial atomic units (one per hunk)
         initial-units (mapv #(g/make-atomic-unit (:id %) (:id %) #{%})
                             clean-hunks)

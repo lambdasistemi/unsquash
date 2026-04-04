@@ -1,0 +1,21 @@
+{
+  "name": "haskell",
+  "file_extensions": [".hs", ".lhs"],
+
+  "import_pattern": "import\\s+(?:qualified\\s+)?([A-Za-z][A-Za-z0-9.]*)",
+  "export_pattern": "(?:module\\s|\\)\\s*where)",
+  "export_name_pattern": "[A-Za-z_][A-Za-z0-9_']*",
+  "definition_pattern": "^([a-z][A-Za-z0-9_']*)\\s+::",
+
+  "module_to_path": {
+    "strip_prefixes": ["src/", "lib/", "test/spec/", "test/"],
+    "separator": "/",
+    "path_separator": ".",
+    "suffix": ".hs"
+  },
+
+  "manifest_files": ["*.cabal"],
+  "manifest_module_pattern": "^\\s*([A-Z][A-Za-z0-9.]*)",
+
+  "wildcard": "_"
+}

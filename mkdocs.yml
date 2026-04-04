@@ -55,4 +55,5 @@ nav:
     - Contracts: architecture/contracts.md
   - Reference:
     - Hunk Zoo: reference/hunk-zoo.md
+    - Language Profiles: reference/language-profiles.md
     - Configuration: reference/configuration.md
