@@ -17,5 +17,6 @@
   "manifest_files": ["*.cabal"],
   "manifest_module_pattern": "^\\s*([A-Z][A-Za-z0-9.]*)",
 
-  "wildcard": "_"
+  "wildcard": "_",
+  "manifest_first": true
 }

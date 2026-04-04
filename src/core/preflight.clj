@@ -290,10 +290,10 @@
                                   :confidence :preflight :rule "R14")))))))
 
     ;; R15: Manifest dependency changes come before sibling source hunks
-    ;; Requires: manifest_files
+    ;; Requires: manifest_files + manifest_first = true
     ;; For each manifest file with additions, source hunks in the same directory
     ;; subtree depend on the manifest. This scopes R15 to per-package in monorepos.
-    (when manifest-globs
+    (when (and manifest-globs (:manifest_first profile))
       (let [manifest-hunks (filter #(and (matches-manifest? (:file %) manifest-globs)
                                          (seq (add-lines %)))
                                    hunks)
