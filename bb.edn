@@ -35,4 +35,4 @@
                :task (exec 'unsquash.cli/consolidate)}
 
   mcp {:doc "Start MCP server"
-       :task (exec 'unsquash.mcp.server/start)}}}
+       :task (exec 'mcp.server/start)}}}
